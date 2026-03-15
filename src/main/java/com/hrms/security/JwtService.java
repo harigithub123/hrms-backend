@@ -1,7 +1,7 @@
 package com.hrms.security;
 
+import com.hrms.auth.entity.User;
 import com.hrms.config.JwtProperties;
-import com.hrms.entity.User;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.stereotype.Service;
@@ -29,7 +29,7 @@ public class JwtService {
         Instant now = Instant.now();
         Instant expiry = now.plusSeconds(jwtProperties.getAccessTokenValidityMinutes() * 60L);
         String roles = user.getRoles().stream()
-                .map(com.hrms.entity.Role::getName)
+                .map(com.hrms.auth.entity.Role::getName)
                 .collect(Collectors.joining(","));
         return Jwts.builder()
                 .subject(user.getUsername())

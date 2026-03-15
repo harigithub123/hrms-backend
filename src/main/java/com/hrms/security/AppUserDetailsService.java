@@ -1,7 +1,7 @@
 package com.hrms.security;
 
-import com.hrms.entity.User;
-import com.hrms.repository.UserRepository;
+import com.hrms.auth.entity.User;
+import com.hrms.auth.repository.UserRepository;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;

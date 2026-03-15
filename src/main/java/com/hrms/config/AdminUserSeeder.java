@@ -1,7 +1,7 @@
 package com.hrms.config;
 
-import com.hrms.entity.User;
-import com.hrms.repository.UserRepository;
+import com.hrms.auth.entity.User;
+import com.hrms.auth.repository.UserRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;

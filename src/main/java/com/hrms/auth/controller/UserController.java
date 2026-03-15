@@ -1,4 +1,4 @@
-package com.hrms.controller;
+package com.hrms.auth.controller;
 
 import com.hrms.auth.AuthResponse;
 import com.hrms.auth.AuthService;

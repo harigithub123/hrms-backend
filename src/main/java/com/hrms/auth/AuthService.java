@@ -1,10 +1,10 @@
 package com.hrms.auth;
 
+import com.hrms.auth.entity.RefreshToken;
+import com.hrms.auth.entity.User;
+import com.hrms.auth.repository.RefreshTokenRepository;
+import com.hrms.auth.repository.UserRepository;
 import com.hrms.config.JwtProperties;
-import com.hrms.entity.RefreshToken;
-import com.hrms.entity.User;
-import com.hrms.repository.RefreshTokenRepository;
-import com.hrms.repository.UserRepository;
 import com.hrms.security.JwtService;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -105,7 +105,7 @@ public class AuthService {
 
     private AuthResponse.UserInfo toUserInfo(User user) {
         List<String> roles = user.getRoles().stream()
-                .map(com.hrms.entity.Role::getName)
+                .map(com.hrms.auth.entity.Role::getName)
                 .collect(Collectors.toList());
         return new AuthResponse.UserInfo(
                 user.getId(),
