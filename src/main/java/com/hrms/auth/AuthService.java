@@ -4,6 +4,7 @@ import com.hrms.auth.entity.RefreshToken;
 import com.hrms.auth.entity.User;
 import com.hrms.auth.repository.RefreshTokenRepository;
 import com.hrms.auth.repository.UserRepository;
+import com.hrms.org.repository.EmployeeRepository;
 import com.hrms.config.JwtProperties;
 import com.hrms.security.JwtService;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -24,19 +25,22 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final JwtProperties jwtProperties;
+    private final EmployeeRepository employeeRepository;
 
     public AuthService(
             UserRepository userRepository,
             RefreshTokenRepository refreshTokenRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
-            JwtProperties jwtProperties
+            JwtProperties jwtProperties,
+            EmployeeRepository employeeRepository
     ) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.jwtProperties = jwtProperties;
+        this.employeeRepository = employeeRepository;
     }
 
     @Transactional
@@ -103,15 +107,48 @@ public class AuthService {
         return toUserInfo(user);
     }
 
+    @Transactional(readOnly = true)
+    public List<UserSummaryDto> listAllUsersForHr() {
+        return userRepository.findAll().stream()
+                .map(u -> new UserSummaryDto(
+                        u.getId(),
+                        u.getUsername(),
+                        u.getEmployee() != null ? u.getEmployee().getId() : null
+                ))
+                .collect(Collectors.toList());
+    }
+
     private AuthResponse.UserInfo toUserInfo(User user) {
         List<String> roles = user.getRoles().stream()
                 .map(com.hrms.auth.entity.Role::getName)
                 .collect(Collectors.toList());
+        Long employeeId = user.getEmployee() != null ? user.getEmployee().getId() : null;
+        int directReportCount = 0;
+        if (employeeId != null) {
+            directReportCount = (int) employeeRepository.countByManagerId(employeeId);
+        }
         return new AuthResponse.UserInfo(
                 user.getId(),
                 user.getUsername(),
                 user.getEmail(),
-                roles
+                roles,
+                employeeId,
+                directReportCount
         );
+    }
+
+    @Transactional
+    public void linkUserToEmployee(Long userId, Long employeeId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
+        if (employeeId == null) {
+            user.setEmployee(null);
+        } else {
+            if (!employeeRepository.existsById(employeeId)) {
+                throw new IllegalArgumentException("Employee not found: " + employeeId);
+            }
+            user.setEmployee(employeeRepository.getReferenceById(employeeId));
+        }
+        userRepository.save(user);
     }
 }

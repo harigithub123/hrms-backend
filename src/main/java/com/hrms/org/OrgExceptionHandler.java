@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.Map;
 
-@RestControllerAdvice(basePackages = "com.hrms.org")
+@RestControllerAdvice(basePackages = "com.hrms")
 public class OrgExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)

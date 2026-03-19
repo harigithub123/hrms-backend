@@ -15,6 +15,9 @@ public record AuthResponse(
             Long id,
             String username,
             String email,
-            List<String> roles
+            List<String> roles,
+            Long employeeId,
+            /** Employees with this user as manager (for team leave / approvals UI). */
+            int directReportCount
     ) {}
 }

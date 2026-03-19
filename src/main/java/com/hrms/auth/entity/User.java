@@ -1,5 +1,6 @@
 package com.hrms.auth.entity;
 
+import com.hrms.org.entity.Employee;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.HashSet;
@@ -39,6 +40,10 @@ public class User {
     )
     private Set<Role> roles = new HashSet<>();
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "employee_id")
+    private Employee employee;
+
     @PrePersist
     protected void onCreate() {
         Instant now = Instant.now();
@@ -65,4 +70,6 @@ public class User {
     public Instant getUpdatedAt() { return updatedAt; }
     public Set<Role> getRoles() { return roles; }
     public void setRoles(Set<Role> roles) { this.roles = roles; }
+    public Employee getEmployee() { return employee; }
+    public void setEmployee(Employee employee) { this.employee = employee; }
 }

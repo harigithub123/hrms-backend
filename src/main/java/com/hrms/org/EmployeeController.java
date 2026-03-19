@@ -1,6 +1,9 @@
 package com.hrms.org;
 
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -20,7 +23,12 @@ public class EmployeeController {
     }
 
     @GetMapping
-    public List<EmployeeDto> list() {
+    public Page<EmployeeDto> list(@PageableDefault(size = 10, sort = "firstName") Pageable pageable) {
+        return service.findAll(pageable);
+    }
+
+    @GetMapping("/all")
+    public List<EmployeeDto> listAll() {
         return service.findAll();
     }
 

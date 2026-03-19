@@ -2,6 +2,8 @@ package com.hrms.org;
 
 import com.hrms.org.entity.Department;
 import com.hrms.org.repository.DepartmentRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +17,11 @@ public class DepartmentService {
 
     public DepartmentService(DepartmentRepository repository) {
         this.repository = repository;
+    }
+
+    @Transactional(readOnly = true)
+    public Page<DepartmentDto> findAll(Pageable pageable) {
+        return repository.findAll(pageable).map(DepartmentDto::from);
     }
 
     @Transactional(readOnly = true)

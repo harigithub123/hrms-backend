@@ -18,14 +18,14 @@ spring:
         format_sql: true
         default_schema: public
     open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
 
+# If startup fails with webServerStartStop / Tomcat: port is likely in use — set SERVER_PORT=8081 or stop the other process
 server:
-  port: 8080
-
-flyway:
-  enabled: true
-  locations: classpath:db/migration
-  baseline-on-migrate: true
+  port: ${SERVER_PORT:8080}
 
 management:
   endpoints:
