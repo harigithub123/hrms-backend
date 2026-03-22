@@ -1,0 +1,37 @@
+package com.hrms.compensation;
+
+import com.hrms.compensation.dto.CompensationCreateRequest;
+import com.hrms.compensation.dto.CompensationDto;
+import com.hrms.payroll.dto.SalaryStructureDto;
+import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/compensation")
+@PreAuthorize("hasAnyRole('HR','ADMIN')")
+public class CompensationController {
+
+    private final CompensationService compensationService;
+
+    public CompensationController(CompensationService compensationService) {
+        this.compensationService = compensationService;
+    }
+
+    @GetMapping("/employee/{employeeId}")
+    public List<CompensationDto> listForEmployee(@PathVariable Long employeeId) {
+        return compensationService.listForEmployee(employeeId);
+    }
+
+    @PostMapping
+    public CompensationDto create(@Valid @RequestBody CompensationCreateRequest req) {
+        return compensationService.create(req);
+    }
+
+    @PostMapping("/{id}/sync-structure")
+    public SalaryStructureDto sync(@PathVariable Long id) {
+        return compensationService.syncToSalaryStructure(id);
+    }
+}

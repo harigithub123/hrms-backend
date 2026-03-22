@@ -1,5 +1,10 @@
 package com.hrms.payroll;
 
+import com.hrms.advance.AdvanceStatus;
+import com.hrms.advance.entity.PayslipAdvanceDeduction;
+import com.hrms.advance.entity.SalaryAdvance;
+import com.hrms.advance.repository.PayslipAdvanceDeductionRepository;
+import com.hrms.advance.repository.SalaryAdvanceRepository;
 import com.hrms.auth.entity.User;
 import com.hrms.org.repository.EmployeeRepository;
 import com.hrms.payroll.dto.*;
@@ -31,6 +36,8 @@ public class PayrollService {
     private final EmployeeRepository employeeRepository;
     private final CurrentUserService currentUserService;
     private final PayslipPdfService payslipPdfService;
+    private final SalaryAdvanceRepository salaryAdvanceRepository;
+    private final PayslipAdvanceDeductionRepository payslipAdvanceDeductionRepository;
 
     public PayrollService(
             SalaryComponentRepository salaryComponentRepository,
@@ -39,7 +46,9 @@ public class PayrollService {
             PayslipRepository payslipRepository,
             EmployeeRepository employeeRepository,
             CurrentUserService currentUserService,
-            PayslipPdfService payslipPdfService
+            PayslipPdfService payslipPdfService,
+            SalaryAdvanceRepository salaryAdvanceRepository,
+            PayslipAdvanceDeductionRepository payslipAdvanceDeductionRepository
     ) {
         this.salaryComponentRepository = salaryComponentRepository;
         this.structureRepository = structureRepository;
@@ -48,6 +57,8 @@ public class PayrollService {
         this.employeeRepository = employeeRepository;
         this.currentUserService = currentUserService;
         this.payslipPdfService = payslipPdfService;
+        this.salaryAdvanceRepository = salaryAdvanceRepository;
+        this.payslipAdvanceDeductionRepository = payslipAdvanceDeductionRepository;
     }
 
     @Transactional(readOnly = true)
@@ -181,6 +192,35 @@ public class PayrollService {
             if (slipLines.isEmpty()) {
                 continue;
             }
+            SalaryComponent advanceComp = salaryComponentRepository.findByCodeIgnoreCase("ADVANCE_RECOVERY").orElse(null);
+            List<AdvanceRecovery> advanceRecoveries = new ArrayList<>();
+            if (advanceComp != null) {
+                List<SalaryAdvance> recoverable = salaryAdvanceRepository
+                        .findByEmployeeIdAndStatusAndOutstandingBalanceGreaterThan(
+                                employee.getId(), AdvanceStatus.PAID, BigDecimal.ZERO);
+                for (SalaryAdvance adv : recoverable) {
+                    if (adv.getOutstandingBalance() == null
+                            || adv.getOutstandingBalance().compareTo(BigDecimal.ZERO) <= 0) {
+                        continue;
+                    }
+                    BigDecimal per = adv.getRecoveryAmountPerMonth() != null
+                            ? adv.getRecoveryAmountPerMonth()
+                            : adv.getOutstandingBalance();
+                    BigDecimal take = per.min(adv.getOutstandingBalance());
+                    if (take.compareTo(BigDecimal.ZERO) <= 0) {
+                        continue;
+                    }
+                    PayslipLine pl = new PayslipLine();
+                    pl.setComponent(advanceComp);
+                    pl.setComponentCode(advanceComp.getCode());
+                    pl.setComponentName(advanceComp.getName() + " (#" + adv.getId() + ")");
+                    pl.setKind(SalaryComponentKind.DEDUCTION);
+                    pl.setAmount(take);
+                    slipLines.add(pl);
+                    deductions = deductions.add(take);
+                    advanceRecoveries.add(new AdvanceRecovery(adv.getId(), take));
+                }
+            }
             BigDecimal net = gross.subtract(deductions);
             Payslip payslip = new Payslip();
             payslip.setPayRun(run);
@@ -193,6 +233,24 @@ public class PayrollService {
                 payslip.getLines().add(pl);
             }
             payslipRepository.save(payslip);
+            for (AdvanceRecovery ar : advanceRecoveries) {
+                SalaryAdvance adv = salaryAdvanceRepository.findById(ar.advanceId())
+                        .orElseThrow(() -> new IllegalStateException("Advance missing: " + ar.advanceId()));
+                BigDecimal newBal = adv.getOutstandingBalance().subtract(ar.amount());
+                if (newBal.compareTo(BigDecimal.ZERO) < 0) {
+                    newBal = BigDecimal.ZERO;
+                }
+                adv.setOutstandingBalance(newBal);
+                if (newBal.compareTo(BigDecimal.ZERO) <= 0) {
+                    adv.setStatus(AdvanceStatus.RECOVERY_COMPLETE);
+                }
+                salaryAdvanceRepository.save(adv);
+                PayslipAdvanceDeduction pad = new PayslipAdvanceDeduction();
+                pad.setPayslip(payslip);
+                pad.setAdvance(adv);
+                pad.setAmount(ar.amount());
+                payslipAdvanceDeductionRepository.save(pad);
+            }
             generated++;
         }
         if (generated == 0) {
@@ -299,4 +357,6 @@ public class PayrollService {
         c.setSortOrder(req.sortOrder());
         c.setActive(req.active());
     }
+
+    private record AdvanceRecovery(Long advanceId, BigDecimal amount) {}
 }

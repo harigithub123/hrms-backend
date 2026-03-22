@@ -3,11 +3,16 @@ package com.hrms.payroll;
 import com.hrms.payroll.entity.PayRun;
 import com.hrms.payroll.entity.Payslip;
 import com.hrms.payroll.entity.PayslipLine;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.PDPageContentStream;
-import org.apache.pdfbox.pdmodel.common.PDRectangle;
-import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import com.itextpdf.text.Document;
+import com.itextpdf.text.DocumentException;
+import com.itextpdf.text.Element;
+import com.itextpdf.text.Font;
+import com.itextpdf.text.PageSize;
+import com.itextpdf.text.Paragraph;
+import com.itextpdf.text.Phrase;
+import com.itextpdf.text.pdf.PdfPCell;
+import com.itextpdf.text.pdf.PdfPTable;
+import com.itextpdf.text.pdf.PdfWriter;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
@@ -18,81 +23,86 @@ import java.util.List;
 @Service
 public class PayslipPdfService {
 
+    private static final Font TITLE = new Font(Font.FontFamily.HELVETICA, 16, Font.BOLD);
+    private static final Font HEADER = new Font(Font.FontFamily.HELVETICA, 11, Font.BOLD);
+    private static final Font NORMAL = new Font(Font.FontFamily.HELVETICA, 10);
+    private static final Font NORMAL_BOLD = new Font(Font.FontFamily.HELVETICA, 11, Font.BOLD);
+
     public byte[] build(Payslip payslip, PayRun run) throws IOException {
-        try (PDDocument doc = new PDDocument()) {
-            PDPage page = new PDPage(PDRectangle.A4);
-            doc.addPage(page);
-            float margin = 50;
-            float y = page.getMediaBox().getHeight() - margin;
-
-            try (PDPageContentStream cs = new PDPageContentStream(doc, page)) {
-                String empName = (payslip.getEmployee().getFirstName() + " " + payslip.getEmployee().getLastName()).trim();
-                y = drawLine(cs, PDType1Font.HELVETICA_BOLD, 16, margin, y, "Payslip");
-                y -= 8;
-                y = drawLine(cs, PDType1Font.HELVETICA, 11, margin, y,
-                        "Employee: " + empName + "  |  Code: " + nullSafe(payslip.getEmployee().getEmployeeCode()));
-                y = drawLine(cs, PDType1Font.HELVETICA, 11, margin, y,
-                        "Period: " + run.getPeriodStart() + " to " + run.getPeriodEnd());
-                y -= 12;
-
-                List<PayslipLine> lines = payslip.getLines().stream()
-                        .sorted(Comparator
-                                .comparing(PayslipLine::getKind)
-                                .thenComparing(PayslipLine::getComponentCode))
-                        .toList();
-
-                y = drawLine(cs, PDType1Font.HELVETICA_BOLD, 11, margin, y, "Component");
-                drawLineRight(cs, PDType1Font.HELVETICA_BOLD, 11, page.getMediaBox().getWidth() - margin, y, "Amount");
-                y -= 14;
-
-                for (PayslipLine pl : lines) {
-                    String label = pl.getComponentName() + " (" + pl.getKind() + ")";
-                    y = drawLine(cs, PDType1Font.HELVETICA, 10, margin, y, label);
-                    drawLineRight(cs, PDType1Font.HELVETICA, 10, page.getMediaBox().getWidth() - margin, y, pl.getAmount().toPlainString());
-                    y -= 14;
-                    if (y < 80) {
-                        break;
-                    }
-                }
-
-                y -= 10;
-                y = drawLine(cs, PDType1Font.HELVETICA_BOLD, 11, margin, y,
-                        "Gross: " + payslip.getGrossAmount().toPlainString());
-                y = drawLine(cs, PDType1Font.HELVETICA_BOLD, 11, margin, y,
-                        "Deductions: " + payslip.getDeductionAmount().toPlainString());
-                y = drawLine(cs, PDType1Font.HELVETICA_BOLD, 12, margin, y,
-                        "Net pay: " + payslip.getNetAmount().toPlainString());
-            }
-
+        try {
+            Document document = new Document(PageSize.A4, 50, 50, 50, 50);
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            doc.save(baos);
+            PdfWriter.getInstance(document, baos);
+            document.open();
+
+            String empName = (payslip.getEmployee().getFirstName() + " " + payslip.getEmployee().getLastName()).trim();
+            document.add(new Paragraph("Payslip", TITLE));
+            document.add(new Paragraph(" ", NORMAL));
+            document.add(new Paragraph(
+                    "Employee: " + empName + "  |  Code: " + nullSafe(payslip.getEmployee().getEmployeeCode()),
+                    NORMAL
+            ));
+            document.add(new Paragraph(
+                    "Period: " + run.getPeriodStart() + " to " + run.getPeriodEnd(),
+                    NORMAL
+            ));
+            document.add(new Paragraph(" ", NORMAL));
+
+            List<PayslipLine> lines = payslip.getLines().stream()
+                    .sorted(Comparator
+                            .comparing(PayslipLine::getKind)
+                            .thenComparing(PayslipLine::getComponentCode))
+                    .toList();
+
+            PdfPTable table = new PdfPTable(2);
+            table.setWidthPercentage(100);
+            table.setWidths(new float[]{3f, 1f});
+
+            PdfPCell h1 = new PdfPCell(new Phrase("Component", HEADER));
+            h1.setBorder(0);
+            h1.setPaddingBottom(6);
+            PdfPCell h2 = new PdfPCell(new Phrase("Amount", HEADER));
+            h2.setHorizontalAlignment(Element.ALIGN_RIGHT);
+            h2.setBorder(0);
+            h2.setPaddingBottom(6);
+            table.addCell(h1);
+            table.addCell(h2);
+
+            int row = 0;
+            for (PayslipLine pl : lines) {
+                if (row++ >= 40) {
+                    break;
+                }
+                String label = sanitize(pl.getComponentName() + " (" + pl.getKind() + ")");
+                PdfPCell c1 = new PdfPCell(new Phrase(label, NORMAL));
+                c1.setBorder(0);
+                c1.setPaddingTop(2);
+                c1.setPaddingBottom(2);
+                PdfPCell c2 = new PdfPCell(new Phrase(sanitize(pl.getAmount().toPlainString()), NORMAL));
+                c2.setHorizontalAlignment(Element.ALIGN_RIGHT);
+                c2.setBorder(0);
+                c2.setPaddingTop(2);
+                c2.setPaddingBottom(2);
+                table.addCell(c1);
+                table.addCell(c2);
+            }
+            document.add(table);
+
+            document.add(new Paragraph(" ", NORMAL));
+            document.add(new Paragraph("Gross: " + sanitize(payslip.getGrossAmount().toPlainString()), NORMAL_BOLD));
+            document.add(new Paragraph("Deductions: " + sanitize(payslip.getDeductionAmount().toPlainString()), NORMAL_BOLD));
+            document.add(new Paragraph("Net pay: " + sanitize(payslip.getNetAmount().toPlainString()),
+                    new Font(Font.FontFamily.HELVETICA, 12, Font.BOLD)));
+
+            document.close();
             return baos.toByteArray();
+        } catch (DocumentException e) {
+            throw new IOException("Failed to build payslip PDF: " + e.getMessage(), e);
         }
     }
 
     private static String nullSafe(String s) {
         return s != null ? s : "—";
-    }
-
-    private float drawLine(PDPageContentStream cs, PDType1Font font, float size, float x, float y, String text)
-            throws IOException {
-        cs.beginText();
-        cs.setFont(font, size);
-        cs.newLineAtOffset(x, y);
-        cs.showText(sanitize(text));
-        cs.endText();
-        return y - size - 4;
-    }
-
-    private void drawLineRight(PDPageContentStream cs, PDType1Font font, float size, float rightX, float y, String text)
-            throws IOException {
-        String t = sanitize(text);
-        float width = font.getStringWidth(t) / 1000 * size;
-        cs.beginText();
-        cs.setFont(font, size);
-        cs.newLineAtOffset(rightX - width, y);
-        cs.showText(t);
-        cs.endText();
     }
 
     private static String sanitize(String s) {
