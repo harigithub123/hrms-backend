@@ -31,4 +31,20 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
     );
 
     List<LeaveRequest> findByStatusAndEmployeeIdIn(LeaveRequestStatus status, List<Long> employeeIds);
+
+    @Query("""
+            SELECT r FROM LeaveRequest r
+            WHERE r.employee.id = :employeeId
+            AND r.status = :status
+            AND r.startDate >= :fromInclusive
+            AND r.startDate <= :toInclusive
+            AND r.decidedAt IS NOT NULL
+            ORDER BY r.decidedAt ASC, r.id ASC
+            """)
+    List<LeaveRequest> findApprovedForLedger(
+            @Param("employeeId") Long employeeId,
+            @Param("status") LeaveRequestStatus status,
+            @Param("fromInclusive") LocalDate fromInclusive,
+            @Param("toInclusive") LocalDate toInclusive
+    );
 }

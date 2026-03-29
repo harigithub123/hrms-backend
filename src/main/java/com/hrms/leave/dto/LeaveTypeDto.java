@@ -10,6 +10,8 @@ public record LeaveTypeDto(
         String code,
         BigDecimal daysPerYear,
         boolean carryForward,
+        BigDecimal maxCarryForwardPerYear,
+        BigDecimal maxCarryForward,
         boolean paid,
         boolean active
 ) {
@@ -20,6 +22,8 @@ public record LeaveTypeDto(
                 e.getCode(),
                 e.getDaysPerYear(),
                 e.isCarryForward(),
+                e.getMaxCarryForwardPerYear(),
+                e.getMaxCarryForward(),
                 e.isPaid(),
                 e.isActive()
         );

@@ -204,7 +204,8 @@ public class LeaveRequestService {
         LeaveBalance bal = leaveBalanceRepository.findByEmployeeIdAndLeaveTypeIdAndYear(targetEmpId, leaveType.getId(), year)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "No leave balance for " + leaveType.getCode() + " in " + year + ". Ask HR to allocate."));
-        BigDecimal available = bal.getAllocatedDays().subtract(bal.getUsedDays());
+        BigDecimal pool = bal.getAllocatedDays().add(bal.getCarryForwardedDays());
+        BigDecimal available = pool.subtract(bal.getUsedDays());
         if (available.compareTo(totalDays) < 0) {
             throw new IllegalArgumentException("Insufficient balance. Available: " + available);
         }
@@ -237,8 +238,9 @@ public class LeaveRequestService {
                     .findByEmployeeIdAndLeaveTypeIdAndYear(r.getEmployee().getId(), r.getLeaveType().getId(), year)
                     .orElseThrow(() -> new IllegalArgumentException("No leave balance for this request"));
             BigDecimal newUsed = bal.getUsedDays().add(r.getTotalDays());
-            if (newUsed.compareTo(bal.getAllocatedDays()) > 0) {
-                throw new IllegalArgumentException("Approval would exceed allocated balance");
+            BigDecimal pool = bal.getAllocatedDays().add(bal.getCarryForwardedDays());
+            if (newUsed.compareTo(pool) > 0) {
+                throw new IllegalArgumentException("Approval would exceed leave balance (allocated + carry-forward)");
             }
             bal.setUsedDays(newUsed);
             leaveBalanceRepository.save(bal);

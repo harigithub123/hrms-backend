@@ -12,6 +12,7 @@ public record LeaveBalanceDto(
         String leaveTypeCode,
         int year,
         BigDecimal allocatedDays,
+        BigDecimal carryForwardedDays,
         BigDecimal usedDays
 ) {
     public static LeaveBalanceDto from(LeaveBalance b) {
@@ -23,6 +24,7 @@ public record LeaveBalanceDto(
                 b.getLeaveType().getCode(),
                 b.getYear(),
                 b.getAllocatedDays(),
+                b.getCarryForwardedDays(),
                 b.getUsedDays()
         );
     }

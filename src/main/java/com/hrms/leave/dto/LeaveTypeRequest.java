@@ -11,6 +11,8 @@ public record LeaveTypeRequest(
         @NotBlank @Size(max = 50) String code,
         @NotNull BigDecimal daysPerYear,
         boolean carryForward,
+        BigDecimal maxCarryForwardPerYear,
+        BigDecimal maxCarryForward,
         boolean paid,
         boolean active
 ) {}

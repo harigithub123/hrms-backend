@@ -33,6 +33,9 @@ public class LeaveBalance {
     @Column(name = "used_days", nullable = false)
     private BigDecimal usedDays = BigDecimal.ZERO;
 
+    @Column(name = "carry_forwarded_days", nullable = false)
+    private BigDecimal carryForwardedDays = BigDecimal.ZERO;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public Employee getEmployee() { return employee; }
@@ -45,4 +48,6 @@ public class LeaveBalance {
     public void setAllocatedDays(BigDecimal allocatedDays) { this.allocatedDays = allocatedDays; }
     public BigDecimal getUsedDays() { return usedDays; }
     public void setUsedDays(BigDecimal usedDays) { this.usedDays = usedDays; }
+    public BigDecimal getCarryForwardedDays() { return carryForwardedDays; }
+    public void setCarryForwardedDays(BigDecimal carryForwardedDays) { this.carryForwardedDays = carryForwardedDays; }
 }

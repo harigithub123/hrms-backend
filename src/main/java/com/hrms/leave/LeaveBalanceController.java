@@ -1,5 +1,7 @@
 package com.hrms.leave;
 
+import com.hrms.leave.dto.LeaveBalanceAdjustRequest;
+import com.hrms.leave.dto.LeaveBalanceAdjustmentDto;
 import com.hrms.leave.dto.LeaveBalanceDto;
 import com.hrms.leave.dto.LeaveBalanceUpsertRequest;
 import jakarta.validation.Valid;
@@ -31,5 +33,20 @@ public class LeaveBalanceController {
     @PreAuthorize("hasAnyRole('HR', 'ADMIN')")
     public LeaveBalanceDto upsert(@Valid @RequestBody LeaveBalanceUpsertRequest req) {
         return leaveBalanceService.upsert(req);
+    }
+
+    @PostMapping("/adjustments")
+    @PreAuthorize("hasAnyRole('HR', 'ADMIN')")
+    public LeaveBalanceDto adjust(@Valid @RequestBody LeaveBalanceAdjustRequest req) {
+        return leaveBalanceService.adjust(req);
+    }
+
+    @GetMapping("/adjustments")
+    @PreAuthorize("isAuthenticated()")
+    public List<LeaveBalanceAdjustmentDto> listAdjustments(
+            @RequestParam Long employeeId,
+            @RequestParam int year
+    ) {
+        return leaveBalanceService.listAdjustments(employeeId, year);
     }
 }

@@ -25,6 +25,12 @@ public class LeaveType {
     @Column(name = "carry_forward", nullable = false)
     private boolean carryForward;
 
+    @Column(name = "max_carry_forward_per_year")
+    private BigDecimal maxCarryForwardPerYear;
+
+    @Column(name = "max_carry_forward")
+    private BigDecimal maxCarryForward;
+
     @Column(nullable = false)
     private boolean paid = true;
 
@@ -59,6 +65,10 @@ public class LeaveType {
     public void setDaysPerYear(BigDecimal daysPerYear) { this.daysPerYear = daysPerYear; }
     public boolean isCarryForward() { return carryForward; }
     public void setCarryForward(boolean carryForward) { this.carryForward = carryForward; }
+    public BigDecimal getMaxCarryForwardPerYear() { return maxCarryForwardPerYear; }
+    public void setMaxCarryForwardPerYear(BigDecimal maxCarryForwardPerYear) { this.maxCarryForwardPerYear = maxCarryForwardPerYear; }
+    public BigDecimal getMaxCarryForward() { return maxCarryForward; }
+    public void setMaxCarryForward(BigDecimal maxCarryForward) { this.maxCarryForward = maxCarryForward; }
     public boolean isPaid() { return paid; }
     public void setPaid(boolean paid) { this.paid = paid; }
     public boolean isActive() { return active; }

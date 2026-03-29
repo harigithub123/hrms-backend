@@ -7,6 +7,7 @@ import com.hrms.leave.repository.LeaveTypeRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -73,7 +74,24 @@ public class LeaveTypeService {
         t.setCode(req.code().trim().toUpperCase());
         t.setDaysPerYear(req.daysPerYear());
         t.setCarryForward(req.carryForward());
+        if (req.carryForward()) {
+            validateCarryLimits(req.maxCarryForwardPerYear(), req.maxCarryForward());
+            t.setMaxCarryForwardPerYear(req.maxCarryForwardPerYear());
+            t.setMaxCarryForward(req.maxCarryForward());
+        } else {
+            t.setMaxCarryForwardPerYear(null);
+            t.setMaxCarryForward(null);
+        }
         t.setPaid(req.paid());
         t.setActive(req.active());
+    }
+
+    private static void validateCarryLimits(BigDecimal perYear, BigDecimal max) {
+        if (perYear != null && perYear.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Max carry-forward per year cannot be negative");
+        }
+        if (max != null && max.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Max carry-forward cannot be negative");
+        }
     }
 }
