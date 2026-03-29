@@ -2,12 +2,15 @@ package com.hrms.leave;
 
 import com.hrms.auth.entity.User;
 import com.hrms.leave.dto.LeaveLedgerRowDto;
+import com.hrms.leave.dto.LeaveTypeDto;
 import com.hrms.leave.entity.LeaveBalance;
+import com.hrms.leave.entity.LeaveType;
 import com.hrms.leave.entity.LeaveBalanceAdjustment;
 import com.hrms.leave.entity.LeaveRequest;
 import com.hrms.leave.repository.LeaveBalanceAdjustmentRepository;
 import com.hrms.leave.repository.LeaveBalanceRepository;
 import com.hrms.leave.repository.LeaveRequestRepository;
+import com.hrms.leave.repository.LeaveTypeRepository;
 import com.hrms.org.repository.EmployeeRepository;
 import com.hrms.security.CurrentUserService;
 import org.springframework.stereotype.Service;
@@ -31,6 +34,7 @@ public class LeaveReportService {
     private final LeaveBalanceRepository leaveBalanceRepository;
     private final LeaveBalanceAdjustmentRepository adjustmentRepository;
     private final LeaveRequestRepository leaveRequestRepository;
+    private final LeaveTypeRepository leaveTypeRepository;
     private final EmployeeRepository employeeRepository;
     private final CurrentUserService currentUserService;
 
@@ -38,21 +42,58 @@ public class LeaveReportService {
             LeaveBalanceRepository leaveBalanceRepository,
             LeaveBalanceAdjustmentRepository adjustmentRepository,
             LeaveRequestRepository leaveRequestRepository,
+            LeaveTypeRepository leaveTypeRepository,
             EmployeeRepository employeeRepository,
             CurrentUserService currentUserService
     ) {
         this.leaveBalanceRepository = leaveBalanceRepository;
         this.adjustmentRepository = adjustmentRepository;
         this.leaveRequestRepository = leaveRequestRepository;
+        this.leaveTypeRepository = leaveTypeRepository;
         this.employeeRepository = employeeRepository;
         this.currentUserService = currentUserService;
     }
 
+    /**
+     * Leave types for the ledger filter: all active types plus any type (including inactive)
+     * that appears in this employee's balances, adjustments, or approved leave for the year.
+     */
     @Transactional(readOnly = true)
-    public List<LeaveLedgerRowDto> ledger(Long employeeId, int year) {
+    public List<LeaveTypeDto> ledgerFilterLeaveTypes(Long employeeId, int year) {
         assertCanView(employeeId);
         if (!employeeRepository.existsById(employeeId)) {
             throw new IllegalArgumentException("Employee not found: " + employeeId);
+        }
+
+        LocalDate yStart = LocalDate.of(year, 1, 1);
+        LocalDate yEnd = LocalDate.of(year, 12, 31);
+
+        Set<Long> ids = new HashSet<>();
+        for (LeaveType t : leaveTypeRepository.findAll()) {
+            ids.add(t.getId());
+        }
+        leaveBalanceRepository.findByEmployeeIdAndYear(employeeId, year).forEach(b -> ids.add(b.getLeaveType().getId()));
+        for (LeaveBalanceAdjustment a : adjustmentRepository.findHistoryForEmployeeYear(employeeId, year)) {
+            ids.add(a.getLeaveBalance().getLeaveType().getId());
+        }
+        for (LeaveRequest r : leaveRequestRepository.findApprovedForLedger(
+                employeeId, LeaveRequestStatus.APPROVED, yStart, yEnd)) {
+            ids.add(r.getLeaveType().getId());
+        }
+
+        List<LeaveType> types = leaveTypeRepository.findAllById(ids);
+        types.sort(Comparator.comparing(LeaveType::getName, String.CASE_INSENSITIVE_ORDER));
+        return types.stream().map(LeaveTypeDto::from).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<LeaveLedgerRowDto> ledger(Long employeeId, int year, Long leaveTypeId) {
+        assertCanView(employeeId);
+        if (!employeeRepository.existsById(employeeId)) {
+            throw new IllegalArgumentException("Employee not found: " + employeeId);
+        }
+        if (leaveTypeId != null && !leaveTypeRepository.existsById(leaveTypeId)) {
+            throw new IllegalArgumentException("Leave type not found: " + leaveTypeId);
         }
 
         LocalDate yStart = LocalDate.of(year, 1, 1);
@@ -64,12 +105,16 @@ public class LeaveReportService {
                 employeeId, LeaveRequestStatus.APPROVED, yStart, yEnd);
 
         Set<Long> typeIds = new HashSet<>();
-        leaveBalanceRepository.findByEmployeeIdAndYear(employeeId, year).forEach(b -> typeIds.add(b.getLeaveType().getId()));
-        for (LeaveBalanceAdjustment a : adjustments) {
-            typeIds.add(a.getLeaveBalance().getLeaveType().getId());
-        }
-        for (LeaveRequest r : approvedLeaves) {
-            typeIds.add(r.getLeaveType().getId());
+        if (leaveTypeId != null) {
+            typeIds.add(leaveTypeId);
+        } else {
+            leaveBalanceRepository.findByEmployeeIdAndYear(employeeId, year).forEach(b -> typeIds.add(b.getLeaveType().getId()));
+            for (LeaveBalanceAdjustment a : adjustments) {
+                typeIds.add(a.getLeaveBalance().getLeaveType().getId());
+            }
+            for (LeaveRequest r : approvedLeaves) {
+                typeIds.add(r.getLeaveType().getId());
+            }
         }
 
         List<SortableRow> merged = new ArrayList<>();
