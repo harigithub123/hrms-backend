@@ -2,7 +2,7 @@ package com.hrms.auth.controller;
 
 import com.hrms.auth.AuthResponse;
 import com.hrms.auth.AuthService;
-import com.hrms.auth.LinkEmployeeRequest;
+import com.hrms.auth.UpdateUserRolesRequest;
 import com.hrms.auth.UserSummaryDto;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -29,7 +29,7 @@ public class UserController {
     }
 
     @GetMapping("/me")
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN', 'HR')")
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN', 'HR', 'EMPLOYEE')")
     public ResponseEntity<AuthResponse.UserInfo> me(@AuthenticationPrincipal UserDetails userDetails) {
         if (userDetails == null) {
             return ResponseEntity.status(401).build();
@@ -37,19 +37,19 @@ public class UserController {
         return ResponseEntity.ok(authService.getCurrentUserInfo(userDetails.getUsername()));
     }
 
-    @PutMapping("/{id}/employee")
-    @PreAuthorize("hasAnyRole('HR', 'ADMIN')")
-    public ResponseEntity<Void> linkEmployee(
-            @PathVariable Long id,
-            @Valid @RequestBody LinkEmployeeRequest body
-    ) {
-        authService.linkUserToEmployee(id, body.employeeId());
-        return ResponseEntity.noContent().build();
-    }
-
     @GetMapping
     @PreAuthorize("hasAnyRole('HR', 'ADMIN')")
     public List<UserSummaryDto> listUsers() {
         return authService.listAllUsersForHr();
+    }
+
+    @PutMapping("/{id}/roles")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> updateRoles(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateUserRolesRequest body
+    ) {
+        authService.updateUserRoles(id, body.roles());
+        return ResponseEntity.noContent().build();
     }
 }

@@ -1,5 +1,6 @@
 package com.hrms.org;
 
+import com.hrms.auth.EmployeeAccountService;
 import com.hrms.auth.entity.User;
 import com.hrms.org.entity.Department;
 import com.hrms.org.entity.Designation;
@@ -24,15 +25,18 @@ public class EmployeeService {
     private final DepartmentRepository departmentRepository;
     private final DesignationRepository designationRepository;
     private final CurrentUserService currentUserService;
+    private final EmployeeAccountService employeeAccountService;
 
     public EmployeeService(EmployeeRepository employeeRepository,
                            DepartmentRepository departmentRepository,
                            DesignationRepository designationRepository,
-                           CurrentUserService currentUserService) {
+                           CurrentUserService currentUserService,
+                           EmployeeAccountService employeeAccountService) {
         this.employeeRepository = employeeRepository;
         this.departmentRepository = departmentRepository;
         this.designationRepository = designationRepository;
         this.currentUserService = currentUserService;
+        this.employeeAccountService = employeeAccountService;
     }
 
     @Transactional(readOnly = true)
@@ -73,19 +77,24 @@ public class EmployeeService {
     public EmployeeDto create(EmployeeRequest req) {
         Employee e = new Employee();
         mapRequestToEntity(req, e);
-        return EmployeeDto.from(employeeRepository.save(e));
+        e = employeeRepository.save(e);
+        employeeAccountService.provisionUserForNewEmployee(e);
+        return EmployeeDto.from(e);
     }
 
     @Transactional
     public EmployeeDto update(Long id, EmployeeRequest req) {
         Employee e = employeeRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("Employee not found: " + id));
         mapRequestToEntity(req, e);
-        return EmployeeDto.from(employeeRepository.save(e));
+        Employee saved = employeeRepository.save(e);
+        employeeAccountService.syncEmailFromEmployee(saved);
+        return EmployeeDto.from(saved);
     }
 
     @Transactional
     public void delete(Long id) {
         if (!employeeRepository.existsById(id)) throw new IllegalArgumentException("Employee not found: " + id);
+        employeeAccountService.deleteUserForEmployee(id);
         employeeRepository.deleteById(id);
     }
 

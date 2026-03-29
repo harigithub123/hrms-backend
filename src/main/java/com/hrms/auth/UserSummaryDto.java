@@ -1,3 +1,5 @@
 package com.hrms.auth;
 
-public record UserSummaryDto(Long id, String username, Long employeeId) {}
+import java.util.List;
+
+public record UserSummaryDto(Long id, String username, Long employeeId, List<String> roles) {}

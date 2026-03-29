@@ -39,6 +39,9 @@ management:
 # Offer letter PDF: place your letterhead file as src/main/resources/templates/offer-letter-template.pdf
 # Or set HRMS_OFFER_PDF_TEMPLATE_FILE to an absolute path (overrides classpath).
 hrms:
+  employee:
+    # Initial password for auto-created login when an employee record is added (change in production).
+    default-password: ${HRMS_EMPLOYEE_DEFAULT_PASSWORD:password}
   offer:
     pdf-template: classpath:/templates/offer-letter-template.pdf
     pdf-template-file: ${HRMS_OFFER_PDF_TEMPLATE_FILE:}

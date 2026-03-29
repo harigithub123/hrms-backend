@@ -1,8 +1,10 @@
 package com.hrms.auth;
 
 import com.hrms.auth.entity.RefreshToken;
+import com.hrms.auth.entity.Role;
 import com.hrms.auth.entity.User;
 import com.hrms.auth.repository.RefreshTokenRepository;
+import com.hrms.auth.repository.RoleRepository;
 import com.hrms.auth.repository.UserRepository;
 import com.hrms.org.repository.EmployeeRepository;
 import com.hrms.config.JwtProperties;
@@ -13,7 +15,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -26,6 +31,7 @@ public class AuthService {
     private final JwtService jwtService;
     private final JwtProperties jwtProperties;
     private final EmployeeRepository employeeRepository;
+    private final RoleRepository roleRepository;
 
     public AuthService(
             UserRepository userRepository,
@@ -33,7 +39,8 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             JwtProperties jwtProperties,
-            EmployeeRepository employeeRepository
+            EmployeeRepository employeeRepository,
+            RoleRepository roleRepository
     ) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
@@ -41,11 +48,33 @@ public class AuthService {
         this.jwtService = jwtService;
         this.jwtProperties = jwtProperties;
         this.employeeRepository = employeeRepository;
+        this.roleRepository = roleRepository;
+    }
+
+    /**
+     * Employees sign in with username = employee id (string), or with their work email (must be unique).
+     */
+    private Optional<User> resolveUserForLogin(String login) {
+        Optional<User> byUsername = userRepository.findByUsername(login);
+        if (byUsername.isPresent()) {
+            return byUsername;
+        }
+        if (!login.contains("@")) {
+            return Optional.empty();
+        }
+        List<User> byEmail = userRepository.findByEmailIgnoreCase(login);
+        if (byEmail.isEmpty()) {
+            return Optional.empty();
+        }
+        if (byEmail.size() > 1) {
+            throw new BadCredentialsException("Multiple accounts use this email; sign in with your employee ID.");
+        }
+        return Optional.of(byEmail.get(0));
     }
 
     @Transactional
     public AuthResponse login(LoginRequest request) {
-        User user = userRepository.findByUsername(request.username())
+        User user = resolveUserForLogin(request.username().trim())
                 .orElseThrow(() -> new BadCredentialsException("Invalid username or password"));
         if (!passwordEncoder.matches(request.password(), user.getPassword())) {
             throw new BadCredentialsException("Invalid username or password");
@@ -113,9 +142,32 @@ public class AuthService {
                 .map(u -> new UserSummaryDto(
                         u.getId(),
                         u.getUsername(),
-                        u.getEmployee() != null ? u.getEmployee().getId() : null
+                        u.getEmployee() != null ? u.getEmployee().getId() : null,
+                        u.getRoles().stream().map(Role::getName).sorted().collect(Collectors.toList())
                 ))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Replace a user's roles. Accounts linked to an employee always retain {@link EmployeeAccountService#ROLE_EMPLOYEE}.
+     */
+    @Transactional
+    public void updateUserRoles(Long userId, List<String> roleNames) {
+        if (roleNames == null) {
+            throw new IllegalArgumentException("roles required");
+        }
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
+        Set<Role> next = new HashSet<>();
+        for (String name : roleNames) {
+            roleRepository.findByName(name).ifPresent(next::add);
+        }
+        if (user.getEmployee() != null) {
+            roleRepository.findByName(EmployeeAccountService.ROLE_EMPLOYEE).ifPresent(next::add);
+        }
+        user.getRoles().clear();
+        user.getRoles().addAll(next);
+        userRepository.save(user);
     }
 
     private AuthResponse.UserInfo toUserInfo(User user) {
@@ -137,18 +189,4 @@ public class AuthService {
         );
     }
 
-    @Transactional
-    public void linkUserToEmployee(Long userId, Long employeeId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
-        if (employeeId == null) {
-            user.setEmployee(null);
-        } else {
-            if (!employeeRepository.existsById(employeeId)) {
-                throw new IllegalArgumentException("Employee not found: " + employeeId);
-            }
-            user.setEmployee(employeeRepository.getReferenceById(employeeId));
-        }
-        userRepository.save(user);
-    }
 }
