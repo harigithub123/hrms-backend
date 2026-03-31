@@ -10,6 +10,7 @@ public record EmployeeRequest(
         @NotBlank @Size(max = 100) String firstName,
         @NotBlank @Size(max = 100) String lastName,
         @Size(max = 255) String email,
+        @Size(max = 30) String mobileNumber,
         Long departmentId,
         Long designationId,
         Long managerId,

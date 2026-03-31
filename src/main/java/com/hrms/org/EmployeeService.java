@@ -103,6 +103,7 @@ public class EmployeeService {
         e.setFirstName(req.firstName());
         e.setLastName(req.lastName());
         e.setEmail(req.email());
+        e.setMobileNumber(req.mobileNumber());
         e.setJoinedAt(req.joinedAt());
         e.setDepartment(req.departmentId() != null ? departmentRepository.getReferenceById(req.departmentId()) : null);
         e.setDesignation(req.designationId() != null ? designationRepository.getReferenceById(req.designationId()) : null);
