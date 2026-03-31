@@ -1,35 +1,27 @@
 package com.hrms.offers;
 
-import com.hrms.config.OfferPdfTemplateProperties;
 import com.hrms.offers.entity.JobOffer;
+import com.itextpdf.text.Chunk;
 import com.itextpdf.text.Document;
-import com.itextpdf.text.DocumentException;
 import com.itextpdf.text.Element;
 import com.itextpdf.text.Font;
+import com.itextpdf.text.Image;
 import com.itextpdf.text.PageSize;
 import com.itextpdf.text.Paragraph;
 import com.itextpdf.text.Phrase;
-import com.itextpdf.text.pdf.ColumnText;
-import com.itextpdf.text.pdf.PdfContentByte;
-import com.itextpdf.text.pdf.PdfReader;
-import com.itextpdf.text.pdf.PdfStamper;
+import com.itextpdf.text.pdf.PdfPCell;
+import com.itextpdf.text.pdf.PdfPTable;
 import com.itextpdf.text.pdf.PdfWriter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Optional;
+
+import static java.util.Objects.nonNull;
 
 /**
  * Renders offer text onto a fixed letterhead PDF (your company template). If no template is found,
@@ -38,173 +30,211 @@ import java.util.Optional;
 @Service
 public class OfferPdfService {
 
-    private static final Logger log = LoggerFactory.getLogger(OfferPdfService.class);
-
-    private static final float BLANK_MARGIN = 50;
-    private static final float TITLE_GAP = 16;
-    private static final float BOTTOM_GUARD = 50;
-
-    private final OfferPdfTemplateProperties props;
-    private final ResourceLoader resourceLoader;
-
-    public OfferPdfService(OfferPdfTemplateProperties props, ResourceLoader resourceLoader) {
-        this.props = props;
-        this.resourceLoader = resourceLoader;
-    }
+    private static final int FOOTER_HEIGHT = 50;
 
     public byte[] build(JobOffer offer) throws IOException {
-        String html = offer.getBodyHtml() != null ? offer.getBodyHtml() : "";
-        return buildFromHtml(html);
-    }
-
-    public byte[] buildFromHtml(String bodyHtml) throws IOException {
-        String text = bodyHtml != null
-                ? bodyHtml.replaceAll("<[^>]+>", " ").replaceAll("\\s+", " ").trim()
-                : "";
-        text = toHelveticaSafe(text);
-        List<String> lines = wrap(text, props.getWrapChars());
-
-        Optional<Resource> template = resolveTemplateResource();
-        if (template.isPresent()) {
-            try (InputStream is = template.get().getInputStream()) {
-                return buildOnTemplate(is, lines);
-            }
-        }
-        log.info(
-                "Offer PDF template not found (classpath:/templates/offer-letter-template.pdf or hrms.offer.pdf-template-file). Using generated layout."
+        OfferLetterPdfModel model = new OfferLetterPdfModel(
+                offer != null ? offer.getEmployeeType() : null,
+                offer != null ? offer.getCandidateName() : null,
+                offer != null ? offer.getCandidateEmail() : null,
+                offer != null ? offer.getCandidateMobile() : null,
+                offer != null ? offer.getJoinDate() : null,
+                offer != null ? offer.getOfferReleaseDate() : null,
+                offer != null && offer.getProbationPeriodMonths() != null ? String.valueOf(offer.getProbationPeriodMonths()) : "—",
+                offer != null && offer.getJoiningBonus() != null ? offer.getJoiningBonus().toPlainString() : null,
+                offer != null && offer.getYearlyBonus() != null ? offer.getYearlyBonus().toPlainString() : null,
+                offer != null && offer.getDesignation() != null ? offer.getDesignation().getName() : "—",
+                offer != null && offer.getDepartment() != null ? offer.getDepartment().getName() : "—",
+                offer != null && offer.getAnnualCtc() != null ? offer.getAnnualCtc().toPlainString() : "—",
+                List.of()
         );
-        return buildBlankPdf(lines);
+        return generateOfferLetter(model);
     }
 
-    private Optional<Resource> resolveTemplateResource() {
-        String filePath = props.getPdfTemplateFile();
-        if (filePath != null && !filePath.isBlank()) {
-            Path p = Paths.get(filePath.trim());
-            if (Files.isRegularFile(p)) {
-                return Optional.of(new FileSystemResource(p.toFile()));
-            }
-            log.warn("hrms.offer.pdf-template-file does not exist: {}", p.toAbsolutePath());
-        }
-        Resource cp = resourceLoader.getResource(props.getPdfTemplate());
+    public record OfferLetterPdfModel(
+            String employeeType,
+            String employeeName,
+            String personalEmail,
+            String mobile,
+            LocalDate joiningDate,
+            LocalDate offerReleaseDate,
+            String probationMonths,
+            String joiningBonus,
+            String yearlyBonus,
+            String designation,
+            String department,
+            String annualCtc,
+            List<OfferCompLine> compensationLines
+    ) {}
+
+    public record OfferCompLine(String componentLabel, String amount) {}
+
+    public byte[] generateOfferLetter(OfferLetterPdfModel data) {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+
         try {
-            if (cp.exists() && cp.isReadable()) {
-                return Optional.of(cp);
-            }
-        } catch (Exception e) {
-            log.debug("Classpath offer template not available: {}", e.getMessage());
-        }
-        return Optional.empty();
-    }
+            Document document = new Document(PageSize.A4, 40, 40, 40, 40 + FOOTER_HEIGHT);
+            PdfWriter writer = PdfWriter.getInstance(document, baos);
 
-    private byte[] buildOnTemplate(InputStream templatePdf, List<String> lines) throws IOException {
-        try {
-            PdfReader reader = new PdfReader(templatePdf);
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            PdfStamper stamper = new PdfStamper(reader, baos);
-            try {
-                Font font = new Font(Font.FontFamily.HELVETICA, 10);
-                float margin = props.getBodyMarginX();
-                float lineHeight = props.getBodyLineHeight();
-                float minY = props.getBodyMinY();
+            writer.setPageEvent(new FooterPageEvent());
 
-                int totalPages = reader.getNumberOfPages();
-                int pageNum = 1;
-                float y = props.getBodyStartY();
-
-                for (int i = 0; i < lines.size(); i++) {
-                    if (y < minY) {
-                        pageNum++;
-                        if (pageNum > totalPages) {
-                            stamper.insertPage(pageNum, PageSize.A4);
-                            totalPages++;
-                        }
-                        y = PageSize.A4.getHeight() - BLANK_MARGIN;
-                    }
-                    PdfContentByte cb = stamper.getOverContent(pageNum);
-                    String line = safeLine(lines.get(i));
-                    ColumnText.showTextAligned(cb, Element.ALIGN_LEFT, new Phrase(line, font), margin, y, 0);
-                    y -= lineHeight;
-                }
-            } finally {
-                stamper.close();
-                reader.close();
-            }
-            return baos.toByteArray();
-        } catch (DocumentException e) {
-            throw new IOException("Failed to stamp offer PDF: " + e.getMessage(), e);
-        }
-    }
-
-    private byte[] buildBlankPdf(List<String> lines) throws IOException {
-        try {
-            Document document = new Document(PageSize.A4, BLANK_MARGIN, BLANK_MARGIN, BLANK_MARGIN, BLANK_MARGIN);
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            PdfWriter.getInstance(document, baos);
             document.open();
 
-            Font titleFont = new Font(Font.FontFamily.HELVETICA, 14, Font.BOLD);
-            Font bodyFont = new Font(Font.FontFamily.HELVETICA, 10);
-            document.add(new Paragraph("Offer letter", titleFont));
-            document.add(new Paragraph(" ", bodyFont));
+            // Fonts
+            Font titleFont = new Font(Font.FontFamily.HELVETICA, 16, Font.BOLD);
+            Font headerFont = new Font(Font.FontFamily.HELVETICA, 11, Font.BOLD);
+            Font normalFont = new Font(Font.FontFamily.HELVETICA, 11);
+            Font boldFont = new Font(Font.FontFamily.HELVETICA, 11, Font.BOLD);
 
-            for (String line : lines) {
-                document.add(new Paragraph(safeLine(line), bodyFont));
+            // Logo
+            addLogo(document);
+
+            // Title
+            Paragraph title = new Paragraph("OFFER LETTER", titleFont);
+            title.setAlignment(Element.ALIGN_CENTER);
+            title.setSpacingAfter(20);
+            document.add(title);
+
+            // Date
+            Paragraph date = new Paragraph(
+                    "Date: " + formatDate(data.offerReleaseDate()), normalFont);
+            date.setAlignment(Element.ALIGN_RIGHT);
+            date.setSpacingAfter(20);
+            document.add(date);
+
+            // Candidate Name
+            document.add(new Paragraph(data.employeeName(), boldFont));
+            //document.add(new Paragraph(data.(), normalFont));
+            document.add(Chunk.NEWLINE);
+
+            // Subject
+            Paragraph subject = new Paragraph(
+                    "Subject: Offer for the position of " + data.designation(),
+                    boldFont);
+            subject.setSpacingAfter(10);
+            document.add(subject);
+
+            // Body
+            document.add(new Paragraph(
+                    "Dear " + data.employeeName() + ",",
+                    normalFont));
+            document.add(Chunk.NEWLINE);
+
+            document.add(new Paragraph(
+                    "We are pleased to extend to you an offer for the position of "
+                            + data.designation()
+                            + " with Kambson Private Limited, based in "
+                            + " Bangalore.",
+                    normalFont));
+
+            document.add(Chunk.NEWLINE);
+
+            document.add(new Paragraph(
+                    "You will be placed on probation for a period of "+ data.probationMonths()  +" months from your date of joining."
+                    + " This offer is conditional upon successful completion of background verification and submission of all required documentation."
+                    + " Any discrepancy or misrepresentation may result in withdrawal of this offer or termination of employment without notice. ",
+                    normalFont));
+
+            document.add(Chunk.NEWLINE);
+
+            String txt = "We are sure your valuable experience and passion to excel will be of great value to Kambson Private Limited and will help" +
+                    " Kambson Private Limited move faster towards its global vision.\n";
+
+            document.add(new Paragraph(txt, normalFont));
+            document.add(Chunk.NEWLINE);
+            // Salary Table
+            document.add(new Paragraph("Compensation Details:", headerFont));
+            document.add(Chunk.NEWLINE);
+
+            PdfPTable table = new PdfPTable(2);
+            table.setWidthPercentage(100);
+            table.setWidths(new float[]{3, 2});
+
+            addCell(table, "Component", boldFont);
+            addCell(table, "Amount", boldFont);
+
+            List<OfferCompLine> compLines = data.compensationLines() != null ? data.compensationLines() : List.of();
+            for (OfferCompLine l : compLines) {
+                addCell(table, l.componentLabel() != null ? l.componentLabel() : "Component", normalFont);
+                addCell(table, l.amount() != null ? l.amount() : "", normalFont);
             }
+
+            addCell(table, "Total", boldFont);
+            addCell(table, data.annualCtc(), boldFont);
+
+            table.setSpacingAfter(20);
+            document.add(table);
+
+            if (nonNull(data.joiningBonus())) {
+                document.add(new Paragraph(
+                        "As discussed, you will also receive a joining bonus of " + data.joiningBonus()  + " in first month salary.\n",
+                        normalFont));
+                document.add(Chunk.NEWLINE);
+            }
+
+            document.add(new Paragraph(
+                    "This letter constitutes an offer of employment and does not create an employer-employee relationship"
+                    + " until a formal employment agreement is executed.\n",
+                    normalFont));
+            document.add(Chunk.NEWLINE);
+
+            document.add(new Paragraph(
+                    "We are confident that your skills and experience will be a valuable addition to our organization,"
+                    +" and we look forward to your contribution.",
+                    normalFont));
+            document.add(Chunk.NEWLINE);
+
+            // Joining Date
+            document.add(new Paragraph(
+                    "Your expected joining date is: " + formatDate(data.joiningDate())+"\n",
+                    normalFont));
+            document.add(Chunk.NEWLINE);
+
+            // Closing
+            document.add(new Paragraph(
+                    "We look forward to welcoming you to the team.\n",
+                    normalFont));
+            document.add(Chunk.NEWLINE);
+            document.add(Chunk.NEWLINE);
+
+            document.add(new Paragraph("Sincerely,", normalFont));
+            document.add(new Paragraph("Kambson Private Limited", boldFont));
 
             document.close();
-            return baos.toByteArray();
-        } catch (DocumentException e) {
-            throw new IOException("Failed to build offer PDF: " + e.getMessage(), e);
+
+        } catch (Exception e) {
+            throw new RuntimeException("Error generating PDF", e);
         }
+
+        return baos.toByteArray();
     }
 
-    private static String safeLine(String line) {
-        String safe = line == null || line.isBlank() ? " " : line;
-        if (safe.length() > 500) {
-            safe = safe.substring(0, 500) + "...";
-        }
-        return safe;
-    }
+    private static void addLogo(Document document) {
+        try {
+            InputStream is = OfferPdfService.class
+                    .getClassLoader()
+                    .getResourceAsStream("images/logo.png");
 
-    private static String toHelveticaSafe(String s) {
-        if (s == null || s.isEmpty()) {
-            return "";
-        }
-        StringBuilder sb = new StringBuilder(s.length());
-        for (char c : s.toCharArray()) {
-            if (c >= 32 && c <= 126) {
-                sb.append(c);
-            } else if (Character.isWhitespace(c)) {
-                sb.append(' ');
-            } else {
-                sb.append(' ');
+            if (is != null) {
+                Image logo = Image.getInstance(is.readAllBytes());
+                logo.scaleToFit(120, 60);
+                logo.setAlignment(Element.ALIGN_LEFT);
+                document.add(logo);
             }
+        } catch (Exception ignored) {
         }
-        return sb.toString().replaceAll("\\s+", " ").trim();
     }
 
-    private static List<String> wrap(String text, int maxChars) {
-        List<String> out = new ArrayList<>();
-        if (text == null || text.isBlank()) {
-            out.add("(No content)");
-            return out;
-        }
-        String[] words = text.split(" ");
-        StringBuilder cur = new StringBuilder();
-        for (String w : words) {
-            if (cur.length() + w.length() + 1 > maxChars) {
-                out.add(cur.toString());
-                cur = new StringBuilder(w);
-            } else {
-                if (!cur.isEmpty()) {
-                    cur.append(' ');
-                }
-                cur.append(w);
-            }
-        }
-        if (!cur.isEmpty()) {
-            out.add(cur.toString());
-        }
-        return out;
+    private static void addCell(PdfPTable table, String text, Font font) {
+        PdfPCell cell = new PdfPCell(new Phrase(text, font));
+        cell.setPadding(8);
+        table.addCell(cell);
     }
+
+    private static String formatDate(LocalDate date) {
+        return date != null
+                ? date.format(DateTimeFormatter.ofPattern("dd MMM yyyy"))
+                : "";
+    }
+
 }

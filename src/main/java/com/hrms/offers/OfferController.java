@@ -2,6 +2,9 @@ package com.hrms.offers;
 
 import com.hrms.offers.dto.*;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -36,7 +39,7 @@ public class OfferController {
         return offerService.createTemplate(req);
     }
 
-    @PutMapping("/templates/{id}")
+    @PutMapping("/templates/{id:\\d+}")
     public OfferTemplateDto updateTemplate(@PathVariable Long id, @Valid @RequestBody OfferTemplateRequest req) {
         return offerService.updateTemplate(id, req);
     }
@@ -46,10 +49,22 @@ public class OfferController {
         return offerService.listOffers();
     }
 
+    @GetMapping("/paged")
+    public Page<JobOfferDto> listOffersPaged(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String employeeType,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) Long departmentId,
+            @RequestParam(required = false) Long designationId,
+            @PageableDefault(size = 10, sort = "id") Pageable pageable
+    ) {
+        return offerService.listOffersPaged(status, employeeType, q, departmentId, designationId, pageable);
+    }
+
     /**
      * Declared before {@code /{id}} so paths like {@code /api/offers/5/pdf} are not captured as id="5/pdf".
      */
-    @GetMapping("/{id}/pdf")
+    @GetMapping("/{id:\\d+}/pdf")
     public ResponseEntity<byte[]> pdf(@PathVariable Long id) {
         OfferService.OfferPdfDownload d = offerService.generatePdfDownload(id);
         String fn = d.filename();
@@ -62,7 +77,7 @@ public class OfferController {
                 .body(bytes);
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/{id:\\d+}")
     public JobOfferDto get(@PathVariable Long id) {
         return offerService.getOffer(id);
     }
@@ -72,18 +87,52 @@ public class OfferController {
         return offerService.createOffer(req);
     }
 
-    @PostMapping("/{id}/refresh-body")
+    @PostMapping("/{id:\\d+}/refresh-body")
     public JobOfferDto refreshBody(@PathVariable Long id) {
         return offerService.refreshBody(id);
     }
 
-    @PostMapping("/{id}/send")
+    @PostMapping("/{id:\\d+}/send")
     public JobOfferDto send(@PathVariable Long id) {
-        return offerService.sendOffer(id);
+        return offerService.releaseOffer(id, false);
     }
 
-    @PostMapping("/{id}/accept")
+    @PostMapping("/{id:\\d+}/resend")
+    public JobOfferDto resend(@PathVariable Long id) {
+        return offerService.releaseOffer(id, true);
+    }
+
+    @PostMapping("/{id:\\d+}/accept")
     public JobOfferDto accept(@PathVariable Long id) {
         return offerService.acceptOffer(id);
+    }
+
+    @PostMapping("/{id:\\d+}/reject")
+    public JobOfferDto reject(@PathVariable Long id) {
+        return offerService.rejectOffer(id);
+    }
+
+    @PostMapping("/{id:\\d+}/join")
+    public JobOfferDto join(
+            @PathVariable Long id,
+            @Valid @RequestBody(required = false) MarkJoinedRequest body
+    ) {
+        return offerService.markJoined(id, body);
+    }
+
+    @GetMapping(value = "/export.csv", produces = "text/csv")
+    public ResponseEntity<String> exportCsv(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String employeeType,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) Long departmentId,
+            @RequestParam(required = false) Long designationId
+    ) {
+        OfferService.CsvExport export = offerService.exportOffersCsv(status, employeeType, q, departmentId, designationId);
+        String disposition = "attachment; filename=\"" + export.filename().replace("\"", "") + "\"";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition)
+                .contentType(MediaType.valueOf("text/csv"))
+                .body(export.csv());
     }
 }

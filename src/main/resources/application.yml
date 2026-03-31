@@ -1,6 +1,17 @@
 spring:
   application:
     name: hrms-backend
+  mail:
+    host: ${HRMS_SMTP_HOST:}
+    port: ${HRMS_SMTP_PORT:587}
+    username: ${HRMS_SMTP_USER:}
+    password: ${HRMS_SMTP_PASS:}
+    properties:
+      mail:
+        smtp:
+          auth: ${HRMS_SMTP_AUTH:true}
+          starttls:
+            enable: ${HRMS_SMTP_STARTTLS:true}
   datasource:
     url: jdbc:postgresql://localhost:5432/hrms
     username: hrms
@@ -50,6 +61,10 @@ hrms:
     body-min-y: 72
     body-line-height: 12
     wrap-chars: 85
+  email:
+    from: ${HRMS_EMAIL_FROM:no-reply@example.com}
+    reply-to: ${HRMS_EMAIL_REPLY_TO:}
+    offer-subject: ${HRMS_OFFER_EMAIL_SUBJECT:Your Offer Letter}
 
 # JWT (use env JWT_SECRET in production; must be at least 256 bits for HS256)
 app:
