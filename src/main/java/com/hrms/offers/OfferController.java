@@ -72,32 +72,9 @@ public class OfferController {
         return offerService.refreshBody(id);
     }
 
-    @PostMapping("/{id:\\d+}/send")
-    public OfferDto send(@PathVariable Long id) {
-        return offerService.releaseOffer(id, false);
-    }
-
-    @PostMapping("/{id:\\d+}/resend")
-    public OfferDto resend(@PathVariable Long id) {
-        return offerService.releaseOffer(id, true);
-    }
-
-    @PostMapping("/{id:\\d+}/accept")
-    public OfferDto accept(@PathVariable Long id) {
-        return offerService.acceptOffer(id);
-    }
-
-    @PostMapping("/{id:\\d+}/reject")
-    public OfferDto reject(@PathVariable Long id) {
-        return offerService.rejectOffer(id);
-    }
-
-    @PostMapping("/{id:\\d+}/join")
-    public OfferDto join(
-            @PathVariable Long id,
-            @Valid @RequestBody(required = false) MarkJoinedRequest body
-    ) {
-        return offerService.markJoined(id, body);
+    @PostMapping("/{id:\\d+}/action")
+    public OfferDto action(@PathVariable Long id, @Valid @RequestBody OfferActionRequest body) {
+        return offerService.action(id, body);
     }
 
     @GetMapping(value = "/export.csv", produces = "text/csv")

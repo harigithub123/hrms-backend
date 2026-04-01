@@ -177,6 +177,21 @@ public class OfferService {
     }
 
     @Transactional
+    public OfferDto action(Long id, @Valid OfferActionRequest req) {
+        requireHrAdmin();
+        if (req == null || req.action() == null) {
+            throw new IllegalArgumentException("Action is required");
+        }
+        return switch (req.action()) {
+            case SEND -> releaseOffer(id, false);
+            case RESEND -> releaseOffer(id, true);
+            case ACCEPT -> acceptOffer(id);
+            case REJECT -> rejectOffer(id);
+            case JOIN -> markJoined(id, req.join());
+        };
+    }
+
+    @Transactional
     public OfferDto releaseOffer(Long id, boolean forceResend) {
         requireHrAdmin();
         User u = currentUserService.requireCurrentUser();
