@@ -54,6 +54,20 @@ public class CompensationService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
+    public List<CompensationDto> listActiveAsOf(Long employeeId, java.time.LocalDate asOf) {
+        requireHrAdmin();
+        if (!employeeRepository.existsById(employeeId)) {
+            throw new IllegalArgumentException("Employee not found: " + employeeId);
+        }
+        if (asOf == null) {
+            throw new IllegalArgumentException("Effective date is required");
+        }
+        return compensationRepository.findActiveAsOf(employeeId, asOf).stream()
+                .map(this::toDto)
+                .toList();
+    }
+
     @Transactional
     public CompensationDto create(CompensationCreateRequest req) {
         requireHrAdmin();
@@ -74,6 +88,8 @@ public class CompensationService {
             line.setCompensation(c);
             line.setComponent(comp);
             line.setAmount(lr.amount());
+            line.setFrequency(lr.frequency());
+            line.setPayableOn(lr.payableOn());
             c.getLines().add(line);
         }
         return toDto(compensationRepository.save(c));

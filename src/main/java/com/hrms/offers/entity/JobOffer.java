@@ -47,6 +47,9 @@ public class JobOffer {
     @Column(name = "offer_release_date")
     private LocalDate offerReleaseDate;
 
+    @Column(name = "actual_joining_date")
+    private LocalDate actualJoiningDate;
+
     @Column(name = "probation_period_months")
     private Integer probationPeriodMonths;
 
@@ -104,6 +107,8 @@ public class JobOffer {
     public void setJoiningDate(LocalDate joiningDate) { this.joiningDate = joiningDate; }
     public LocalDate getOfferReleaseDate() { return offerReleaseDate; }
     public void setOfferReleaseDate(LocalDate offerReleaseDate) { this.offerReleaseDate = offerReleaseDate; }
+    public LocalDate getActualJoiningDate() { return actualJoiningDate; }
+    public void setActualJoiningDate(LocalDate actualJoiningDate) { this.actualJoiningDate = actualJoiningDate; }
     public Integer getProbationPeriodMonths() { return probationPeriodMonths; }
     public void setProbationPeriodMonths(Integer probationPeriodMonths) { this.probationPeriodMonths = probationPeriodMonths; }
     public BigDecimal getJoiningBonus() { return joiningBonus; }

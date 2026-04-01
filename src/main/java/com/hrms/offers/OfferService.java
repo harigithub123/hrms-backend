@@ -317,6 +317,9 @@ public class OfferService {
         User u = currentUserService.requireCurrentUser();
         JobOffer o = jobOfferRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Offer not found: " + id));
+        if (body == null || body.actualJoiningDate() == null) {
+            throw new IllegalArgumentException("Actual joining date is required");
+        }
         if (o.getStatus() != OfferStatus.ACCEPTED) {
             throw new IllegalArgumentException("Only accepted offers can be marked joined");
         }
@@ -339,12 +342,13 @@ public class OfferService {
                 o.getCandidateMobile(),
                 o.getDepartment() != null ? o.getDepartment().getId() : null,
                 o.getDesignation() != null ? o.getDesignation().getId() : null,
-                o.getJoiningDate()
+                body.actualJoiningDate()
         );
         var createdEmployee = employeeService.create(empReq);
 
         o.setEmployee(employeeRepository.getReferenceById(createdEmployee.id()));
         o.setStatus(OfferStatus.JOINED);
+        o.setActualJoiningDate(body.actualJoiningDate());
         recordEvent(o, OfferEventAction.JOINED, u.getId(), null);
 
         OfferCompensation offerComp = offerCompensationRepository.findByOfferId(o.getId())
@@ -355,7 +359,8 @@ public class OfferService {
 
         EmployeeCompensation c = new EmployeeCompensation();
         c.setEmployee(employeeRepository.getReferenceById(createdEmployee.id()));
-        c.setEffectiveFrom(o.getJoiningDate() != null ? o.getJoiningDate() : LocalDate.now());
+        LocalDate eff = body.compensationEffectiveFrom() != null ? body.compensationEffectiveFrom() : body.actualJoiningDate();
+        c.setEffectiveFrom(eff);
         c.setCurrency(offerComp.getCurrency() != null ? offerComp.getCurrency() : (o.getCurrency() != null ? o.getCurrency() : "INR"));
         c.setAnnualCtc(offerComp.getAnnualCtc() != null ? offerComp.getAnnualCtc() : o.getAnnualCtc());
         c.setNotes("Created from offer #" + o.getId());
@@ -365,7 +370,32 @@ public class OfferService {
             nl.setCompensation(c);
             nl.setComponent(ol.getComponent());
             nl.setAmount(ol.getAmount() != null ? ol.getAmount() : BigDecimal.ZERO);
+            nl.setFrequency(com.hrms.compensation.CompensationFrequency.MONTHLY);
             c.getLines().add(nl);
+        }
+
+        // Bonuses as separate lines with frequency.
+        if (o.getJoiningBonus() != null && BigDecimal.ZERO.compareTo(o.getJoiningBonus()) != 0) {
+            SalaryComponent sc = salaryComponentRepository.findByCodeIgnoreCase("JOINING_BONUS")
+                    .orElseThrow(() -> new IllegalStateException("Salary component missing: JOINING_BONUS"));
+            EmployeeCompensationLine bl = new EmployeeCompensationLine();
+            bl.setCompensation(c);
+            bl.setComponent(sc);
+            bl.setAmount(o.getJoiningBonus());
+            bl.setFrequency(com.hrms.compensation.CompensationFrequency.ONE_TIME);
+            bl.setPayableOn(body.actualJoiningDate());
+            c.getLines().add(bl);
+        }
+        if (o.getYearlyBonus() != null && BigDecimal.ZERO.compareTo(o.getYearlyBonus()) != 0) {
+            SalaryComponent sc = salaryComponentRepository.findByCodeIgnoreCase("ANNUAL_BONUS")
+                    .orElseThrow(() -> new IllegalStateException("Salary component missing: ANNUAL_BONUS"));
+            EmployeeCompensationLine bl = new EmployeeCompensationLine();
+            bl.setCompensation(c);
+            bl.setComponent(sc);
+            bl.setAmount(o.getYearlyBonus());
+            bl.setFrequency(com.hrms.compensation.CompensationFrequency.YEARLY);
+            bl.setPayableOn(null);
+            c.getLines().add(bl);
         }
 
         EmployeeCompensation saved = employeeCompensationRepository.save(c);

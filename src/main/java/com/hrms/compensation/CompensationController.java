@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -23,6 +24,14 @@ public class CompensationController {
     @GetMapping("/employee/{employeeId}")
     public List<CompensationDto> listForEmployee(@PathVariable Long employeeId) {
         return compensationService.listForEmployee(employeeId);
+    }
+
+    @GetMapping("/search")
+    public List<CompensationDto> search(
+            @RequestParam Long employeeId,
+            @RequestParam LocalDate effectiveDate
+    ) {
+        return compensationService.listActiveAsOf(employeeId, effectiveDate);
     }
 
     @PostMapping
