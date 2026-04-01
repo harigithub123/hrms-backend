@@ -221,10 +221,9 @@ public class OfferService {
             String currency = comp.getCurrency() != null ? comp.getCurrency() : (o.getCurrency() != null ? o.getCurrency() : "");
             lines = comp.getOfferCompensationLine().stream().map(l -> {
                 String label = l.getComponent() != null
-                        ? (l.getComponent().getCode() + " — " + l.getComponent().getName())
+                        ? l.getComponent().getName()
                         : "Component";
-                String amt = formatMoney(l.getAmount(), currency);
-                return new OfferPdfService.OfferCompLine(label, amt);
+                return new OfferPdfService.OfferCompLine(label, l.getAmount());
             }).toList();
         }
         OfferPdfService.OfferLetterPdfModel model = new OfferPdfService.OfferLetterPdfModel(
@@ -234,12 +233,12 @@ public class OfferService {
                 o.getCandidateMobile(),
                 o.getJoiningDate(),
                 o.getOfferReleaseDate(),
-                o.getProbationPeriodMonths() != null ? String.valueOf(o.getProbationPeriodMonths()) : "—",
-                formatMoney(o.getJoiningBonus(), o.getCurrency()),
-                formatMoney(o.getYearlyBonus(), o.getCurrency()),
+                o.getProbationPeriodMonths() != null ? o.getProbationPeriodMonths() : 0,
+                o.getJoiningBonus(),
+                o.getYearlyBonus(),
                 o.getDesignation() != null ? o.getDesignation().getName() : "—",
                 o.getDepartment() != null ? o.getDepartment().getName() : "—",
-                formatMoney(o.getAnnualCtc(), o.getCurrency()),
+                o.getAnnualCtc(),
                 lines
         );
         byte[] pdf = offerPdfService.generateOfferLetter(model);

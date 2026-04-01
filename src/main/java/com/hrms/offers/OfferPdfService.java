@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -40,12 +41,12 @@ public class OfferPdfService {
                 offer != null ? offer.getCandidateMobile() : null,
                 offer != null ? offer.getJoiningDate() : null,
                 offer != null ? offer.getOfferReleaseDate() : null,
-                offer != null && offer.getProbationPeriodMonths() != null ? String.valueOf(offer.getProbationPeriodMonths()) : "—",
-                offer != null && offer.getJoiningBonus() != null ? offer.getJoiningBonus().toPlainString() : null,
-                offer != null && offer.getYearlyBonus() != null ? offer.getYearlyBonus().toPlainString() : null,
+                offer != null && offer.getProbationPeriodMonths() != null ? offer.getProbationPeriodMonths() : 0,
+                offer != null && offer.getJoiningBonus() != null ? offer.getJoiningBonus(): null,
+                offer != null && offer.getYearlyBonus() != null ? offer.getYearlyBonus() : null,
                 offer != null && offer.getDesignation() != null ? offer.getDesignation().getName() : "—",
                 offer != null && offer.getDepartment() != null ? offer.getDepartment().getName() : "—",
-                offer != null && offer.getAnnualCtc() != null ? offer.getAnnualCtc().toPlainString() : "—",
+                offer != null && offer.getAnnualCtc() != null ? offer.getAnnualCtc(): BigDecimal.ZERO,
                 List.of()
         );
         return generateOfferLetter(model);
@@ -58,16 +59,16 @@ public class OfferPdfService {
             String mobile,
             LocalDate joiningDate,
             LocalDate offerReleaseDate,
-            String probationMonths,
-            String joiningBonus,
-            String yearlyBonus,
+            int probationMonths,
+            BigDecimal joiningBonus,
+            BigDecimal yearlyBonus,
             String designation,
             String department,
-            String annualCtc,
+            BigDecimal annualCtc,
             List<OfferCompLine> compensationLines
     ) {}
 
-    public record OfferCompLine(String componentLabel, String amount) {}
+    public record OfferCompLine(String componentLabel, BigDecimal amount) {}
 
     public byte[] generateOfferLetter(OfferLetterPdfModel data) {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -156,16 +157,16 @@ public class OfferPdfService {
             List<OfferCompLine> compLines = data.compensationLines() != null ? data.compensationLines() : List.of();
             for (OfferCompLine l : compLines) {
                 addCell(table, l.componentLabel() != null ? l.componentLabel() : "Component", normalFont);
-                addCell(table, l.amount() != null ? l.amount() : "", normalFont);
+                addCell(table, l.amount() != null ? l.amount().toString() : "", normalFont);
             }
 
             addCell(table, "Total", boldFont);
-            addCell(table, data.annualCtc(), boldFont);
+            addCell(table, data.annualCtc()+"", boldFont);
 
             table.setSpacingAfter(20);
             document.add(table);
 
-            if (nonNull(data.joiningBonus())) {
+            if (BigDecimal.ZERO.compareTo(data.joiningBonus()) > 0) {
                 document.add(new Paragraph(
                         "As discussed, you will also receive a joining bonus of " + data.joiningBonus()  + " in first month salary.\n",
                         normalFont));
