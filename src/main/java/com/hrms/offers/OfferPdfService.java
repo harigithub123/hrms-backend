@@ -38,7 +38,7 @@ public class OfferPdfService {
                 offer != null ? offer.getCandidateName() : null,
                 offer != null ? offer.getCandidateEmail() : null,
                 offer != null ? offer.getCandidateMobile() : null,
-                offer != null ? offer.getJoinDate() : null,
+                offer != null ? offer.getJoiningDate() : null,
                 offer != null ? offer.getOfferReleaseDate() : null,
                 offer != null && offer.getProbationPeriodMonths() != null ? String.valueOf(offer.getProbationPeriodMonths()) : "—",
                 offer != null && offer.getJoiningBonus() != null ? offer.getJoiningBonus().toPlainString() : null,

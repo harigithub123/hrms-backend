@@ -29,7 +29,7 @@ public class OfferCompensation {
     private Instant createdAt;
 
     @OneToMany(mappedBy = "compensation", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<OfferCompensationLine> offerCompensationLine = new ArrayList<>();
+    private final List<OfferCompensationLine> offerCompensationLine = new ArrayList<>();
 
     @PrePersist
     protected void onCreate() {

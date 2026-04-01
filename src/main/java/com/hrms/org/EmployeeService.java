@@ -107,6 +107,5 @@ public class EmployeeService {
         e.setJoinedAt(req.joinedAt());
         e.setDepartment(req.departmentId() != null ? departmentRepository.getReferenceById(req.departmentId()) : null);
         e.setDesignation(req.designationId() != null ? designationRepository.getReferenceById(req.designationId()) : null);
-        e.setManager(req.managerId() != null ? employeeRepository.getReferenceById(req.managerId()) : null);
     }
 }

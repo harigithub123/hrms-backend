@@ -13,6 +13,5 @@ public record EmployeeRequest(
         @Size(max = 30) String mobileNumber,
         Long departmentId,
         Long designationId,
-        Long managerId,
         LocalDate joinedAt
 ) {}

@@ -7,9 +7,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 
-public record JobOfferDto(
+public record OfferDto(
         Long id,
-        Long templateId,
         String candidateName,
         String candidateEmail,
         String candidateMobile,
@@ -19,17 +18,11 @@ public record JobOfferDto(
         String departmentName,
         Long designationId,
         String designationName,
-        Long managerId,
-        String managerName,
-        LocalDate joinDate,
+        LocalDate joiningDate,
         LocalDate offerReleaseDate,
         Integer probationPeriodMonths,
         BigDecimal joiningBonus,
         BigDecimal yearlyBonus,
-        BigDecimal annualCtc,
-        String currency,
-        String bodyHtml,
-        Instant pdfGeneratedAt,
         Instant sentAt,
         Instant acceptedAt,
         Instant rejectedAt,
@@ -38,10 +31,9 @@ public record JobOfferDto(
         Long employeeId,
         Instant createdAt
 ) {
-    public static JobOfferDto from(JobOffer o) {
-        return new JobOfferDto(
+    public static OfferDto from(JobOffer o) {
+        return new OfferDto(
                 o.getId(),
-                o.getTemplate() != null ? o.getTemplate().getId() : null,
                 o.getCandidateName(),
                 o.getCandidateEmail(),
                 o.getCandidateMobile(),
@@ -51,17 +43,11 @@ public record JobOfferDto(
                 o.getDepartment() != null ? o.getDepartment().getName() : null,
                 o.getDesignation() != null ? o.getDesignation().getId() : null,
                 o.getDesignation() != null ? o.getDesignation().getName() : null,
-                o.getManager() != null ? o.getManager().getId() : null,
-                o.getManager() != null ? (o.getManager().getFirstName() + " " + o.getManager().getLastName()).trim() : null,
-                o.getJoinDate(),
+                o.getJoiningDate(),
                 o.getOfferReleaseDate(),
                 o.getProbationPeriodMonths(),
                 o.getJoiningBonus(),
                 o.getYearlyBonus(),
-                o.getAnnualCtc(),
-                o.getCurrency(),
-                o.getBodyHtml(),
-                o.getPdfGeneratedAt(),
                 o.getSentAt(),
                 o.getAcceptedAt(),
                 o.getRejectedAt(),

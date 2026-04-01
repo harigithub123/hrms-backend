@@ -18,10 +18,6 @@ public class JobOffer {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "template_id")
-    private OfferTemplate template;
-
     @Column(name = "candidate_name", nullable = false, length = 200)
     private String candidateName;
 
@@ -46,12 +42,8 @@ public class JobOffer {
     @JoinColumn(name = "designation_id")
     private Designation designation;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "manager_id")
-    private Employee manager;
-
-    @Column(name = "join_date")
-    private LocalDate joinDate;
+    @Column(name = "joining_date")
+    private LocalDate joiningDate;
 
     @Column(name = "offer_release_date")
     private LocalDate offerReleaseDate;
@@ -70,12 +62,6 @@ public class JobOffer {
 
     @Column(nullable = false, length = 10)
     private String currency = "INR";
-
-    @Column(name = "body_html", columnDefinition = "TEXT")
-    private String bodyHtml;
-
-    @Column(name = "pdf_generated_at")
-    private Instant pdfGeneratedAt;
 
     @Column(name = "sent_at")
     private Instant sentAt;
@@ -131,8 +117,6 @@ public class JobOffer {
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
-    public OfferTemplate getTemplate() { return template; }
-    public void setTemplate(OfferTemplate template) { this.template = template; }
     public String getCandidateName() { return candidateName; }
     public void setCandidateName(String candidateName) { this.candidateName = candidateName; }
     public String getCandidateEmail() { return candidateEmail; }
@@ -147,10 +131,8 @@ public class JobOffer {
     public void setDepartment(Department department) { this.department = department; }
     public Designation getDesignation() { return designation; }
     public void setDesignation(Designation designation) { this.designation = designation; }
-    public Employee getManager() { return manager; }
-    public void setManager(Employee manager) { this.manager = manager; }
-    public LocalDate getJoinDate() { return joinDate; }
-    public void setJoinDate(LocalDate joinDate) { this.joinDate = joinDate; }
+    public LocalDate getJoiningDate() { return joiningDate; }
+    public void setJoiningDate(LocalDate joiningDate) { this.joiningDate = joiningDate; }
     public LocalDate getOfferReleaseDate() { return offerReleaseDate; }
     public void setOfferReleaseDate(LocalDate offerReleaseDate) { this.offerReleaseDate = offerReleaseDate; }
     public Integer getProbationPeriodMonths() { return probationPeriodMonths; }
@@ -163,10 +145,6 @@ public class JobOffer {
     public void setAnnualCtc(BigDecimal annualCtc) { this.annualCtc = annualCtc; }
     public String getCurrency() { return currency; }
     public void setCurrency(String currency) { this.currency = currency; }
-    public String getBodyHtml() { return bodyHtml; }
-    public void setBodyHtml(String bodyHtml) { this.bodyHtml = bodyHtml; }
-    public Instant getPdfGeneratedAt() { return pdfGeneratedAt; }
-    public void setPdfGeneratedAt(Instant pdfGeneratedAt) { this.pdfGeneratedAt = pdfGeneratedAt; }
     public Instant getSentAt() { return sentAt; }
     public void setSentAt(Instant sentAt) { this.sentAt = sentAt; }
     public Long getSentByUserId() { return sentByUserId; }

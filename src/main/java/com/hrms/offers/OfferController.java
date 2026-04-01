@@ -24,33 +24,13 @@ public class OfferController {
         this.offerService = offerService;
     }
 
-    @GetMapping("/templates")
-    public List<OfferTemplateDto> listTemplates() {
-        return offerService.listTemplates();
-    }
-
-    @GetMapping("/templates/all")
-    public List<OfferTemplateDto> listAllTemplates() {
-        return offerService.listAllTemplatesAdmin();
-    }
-
-    @PostMapping("/templates")
-    public OfferTemplateDto createTemplate(@Valid @RequestBody OfferTemplateRequest req) {
-        return offerService.createTemplate(req);
-    }
-
-    @PutMapping("/templates/{id:\\d+}")
-    public OfferTemplateDto updateTemplate(@PathVariable Long id, @Valid @RequestBody OfferTemplateRequest req) {
-        return offerService.updateTemplate(id, req);
-    }
-
     @GetMapping
-    public List<JobOfferDto> listOffers() {
+    public List<OfferDto> listOffers() {
         return offerService.listOffers();
     }
 
     @GetMapping("/paged")
-    public Page<JobOfferDto> listOffersPaged(
+    public Page<OfferDto> listOffersPaged(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String employeeType,
             @RequestParam(required = false) String q,
@@ -78,42 +58,42 @@ public class OfferController {
     }
 
     @GetMapping("/{id:\\d+}")
-    public JobOfferDto get(@PathVariable Long id) {
+    public OfferDto get(@PathVariable Long id) {
         return offerService.getOffer(id);
     }
 
     @PostMapping
-    public JobOfferDto create(@Valid @RequestBody JobOfferCreateRequest req) {
+    public OfferDto create(@Valid @RequestBody OfferCreateRequest req) {
         return offerService.createOffer(req);
     }
 
     @PostMapping("/{id:\\d+}/refresh-body")
-    public JobOfferDto refreshBody(@PathVariable Long id) {
+    public OfferDto refreshBody(@PathVariable Long id) {
         return offerService.refreshBody(id);
     }
 
     @PostMapping("/{id:\\d+}/send")
-    public JobOfferDto send(@PathVariable Long id) {
+    public OfferDto send(@PathVariable Long id) {
         return offerService.releaseOffer(id, false);
     }
 
     @PostMapping("/{id:\\d+}/resend")
-    public JobOfferDto resend(@PathVariable Long id) {
+    public OfferDto resend(@PathVariable Long id) {
         return offerService.releaseOffer(id, true);
     }
 
     @PostMapping("/{id:\\d+}/accept")
-    public JobOfferDto accept(@PathVariable Long id) {
+    public OfferDto accept(@PathVariable Long id) {
         return offerService.acceptOffer(id);
     }
 
     @PostMapping("/{id:\\d+}/reject")
-    public JobOfferDto reject(@PathVariable Long id) {
+    public OfferDto reject(@PathVariable Long id) {
         return offerService.rejectOffer(id);
     }
 
     @PostMapping("/{id:\\d+}/join")
-    public JobOfferDto join(
+    public OfferDto join(
             @PathVariable Long id,
             @Valid @RequestBody(required = false) MarkJoinedRequest body
     ) {
