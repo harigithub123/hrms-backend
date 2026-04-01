@@ -3,7 +3,6 @@ package com.hrms.offers.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -16,8 +15,6 @@ public record OfferCreateRequest(
         Long designationId,
         LocalDate joiningDate,
         Integer probationPeriodMonths,
-        BigDecimal joiningBonus,
-        BigDecimal yearlyBonus,
         List<OfferCompensationLineRequest> compensationLines
 ) {}
 

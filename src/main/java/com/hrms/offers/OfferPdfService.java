@@ -47,8 +47,6 @@ public class OfferPdfService {
                 offer != null ? offer.getJoiningDate() : null,
                 offer != null ? offer.getOfferReleaseDate() : null,
                 offer != null && offer.getProbationPeriodMonths() != null ? offer.getProbationPeriodMonths() : 0,
-                offer != null && offer.getJoiningBonus() != null ? offer.getJoiningBonus(): null,
-                offer != null && offer.getYearlyBonus() != null ? offer.getYearlyBonus() : null,
                 offer != null && offer.getDesignation() != null ? offer.getDesignation().getName() : "—",
                 offer != null && offer.getDepartment() != null ? offer.getDepartment().getName() : "—",
                 offer != null && offer.getAnnualCtc() != null ? offer.getAnnualCtc(): BigDecimal.ZERO,
@@ -65,8 +63,6 @@ public class OfferPdfService {
             LocalDate joiningDate,
             LocalDate offerReleaseDate,
             int probationMonths,
-            BigDecimal joiningBonus,
-            BigDecimal yearlyBonus,
             String designation,
             String department,
             BigDecimal annualCtc,
@@ -155,13 +151,6 @@ public class OfferPdfService {
 
             document.add(new Paragraph(txt, normalFont));
             document.add(Chunk.NEWLINE);
-
-            if (BigDecimal.ZERO.compareTo(data.joiningBonus()) > 0) {
-                document.add(new Paragraph(
-                        "As discussed, you will also receive a joining bonus of " + data.joiningBonus()  + " in first month salary.\n",
-                        normalFont));
-                document.add(Chunk.NEWLINE);
-            }
 
             document.add(new Paragraph(
                     "This letter constitutes an offer of employment and does not create an employer-employee relationship"

@@ -53,12 +53,6 @@ public class JobOffer {
     @Column(name = "probation_period_months")
     private Integer probationPeriodMonths;
 
-    @Column(name = "joining_bonus", precision = 14, scale = 2)
-    private BigDecimal joiningBonus;
-
-    @Column(name = "yearly_bonus", precision = 14, scale = 2)
-    private BigDecimal yearlyBonus;
-
     @Column(name = "annual_ctc", precision = 14, scale = 2)
     private BigDecimal annualCtc;
 
@@ -111,10 +105,6 @@ public class JobOffer {
     public void setActualJoiningDate(LocalDate actualJoiningDate) { this.actualJoiningDate = actualJoiningDate; }
     public Integer getProbationPeriodMonths() { return probationPeriodMonths; }
     public void setProbationPeriodMonths(Integer probationPeriodMonths) { this.probationPeriodMonths = probationPeriodMonths; }
-    public BigDecimal getJoiningBonus() { return joiningBonus; }
-    public void setJoiningBonus(BigDecimal joiningBonus) { this.joiningBonus = joiningBonus; }
-    public BigDecimal getYearlyBonus() { return yearlyBonus; }
-    public void setYearlyBonus(BigDecimal yearlyBonus) { this.yearlyBonus = yearlyBonus; }
     public BigDecimal getAnnualCtc() { return annualCtc; }
     public void setAnnualCtc(BigDecimal annualCtc) { this.annualCtc = annualCtc; }
     public String getCurrency() { return currency; }

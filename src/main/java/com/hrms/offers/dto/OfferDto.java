@@ -22,8 +22,6 @@ public record OfferDto(
         LocalDate offerReleaseDate,
         LocalDate actualJoiningDate,
         Integer probationPeriodMonths,
-        BigDecimal joiningBonus,
-        BigDecimal yearlyBonus,
         Long employeeId,
         Instant createdAt
 ) {
@@ -43,8 +41,6 @@ public record OfferDto(
                 o.getOfferReleaseDate(),
                 o.getActualJoiningDate(),
                 o.getProbationPeriodMonths(),
-                o.getJoiningBonus(),
-                o.getYearlyBonus(),
                 o.getEmployee() != null ? o.getEmployee().getId() : null,
                 o.getCreatedAt()
         );

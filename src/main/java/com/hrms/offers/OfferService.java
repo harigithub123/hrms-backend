@@ -134,8 +134,6 @@ public class OfferService {
         o.setDesignation(req.designationId() != null ? designationRepository.getReferenceById(req.designationId()) : null);
         o.setJoiningDate(req.joiningDate());
         o.setProbationPeriodMonths(req.probationPeriodMonths());
-        o.setJoiningBonus(req.joiningBonus());
-        o.setYearlyBonus(req.yearlyBonus());
         o.setStatus(OfferStatus.DRAFT);
         JobOffer saved = jobOfferRepository.save(o);
 
@@ -251,8 +249,6 @@ public class OfferService {
                 o.getJoiningDate(),
                 o.getOfferReleaseDate(),
                 o.getProbationPeriodMonths() != null ? o.getProbationPeriodMonths() : 0,
-                o.getJoiningBonus(),
-                o.getYearlyBonus(),
                 o.getDesignation() != null ? o.getDesignation().getName() : "—",
                 o.getDepartment() != null ? o.getDepartment().getName() : "—",
                 o.getAnnualCtc(),
@@ -374,29 +370,7 @@ public class OfferService {
             c.getLines().add(nl);
         }
 
-        // Bonuses as separate lines with frequency.
-        if (o.getJoiningBonus() != null && BigDecimal.ZERO.compareTo(o.getJoiningBonus()) != 0) {
-            SalaryComponent sc = salaryComponentRepository.findByCodeIgnoreCase("JOINING_BONUS")
-                    .orElseThrow(() -> new IllegalStateException("Salary component missing: JOINING_BONUS"));
-            EmployeeCompensationLine bl = new EmployeeCompensationLine();
-            bl.setCompensation(c);
-            bl.setComponent(sc);
-            bl.setAmount(o.getJoiningBonus());
-            bl.setFrequency(com.hrms.compensation.CompensationFrequency.ONE_TIME);
-            bl.setPayableOn(body.actualJoiningDate());
-            c.getLines().add(bl);
-        }
-        if (o.getYearlyBonus() != null && BigDecimal.ZERO.compareTo(o.getYearlyBonus()) != 0) {
-            SalaryComponent sc = salaryComponentRepository.findByCodeIgnoreCase("ANNUAL_BONUS")
-                    .orElseThrow(() -> new IllegalStateException("Salary component missing: ANNUAL_BONUS"));
-            EmployeeCompensationLine bl = new EmployeeCompensationLine();
-            bl.setCompensation(c);
-            bl.setComponent(sc);
-            bl.setAmount(o.getYearlyBonus());
-            bl.setFrequency(com.hrms.compensation.CompensationFrequency.YEARLY);
-            bl.setPayableOn(null);
-            c.getLines().add(bl);
-        }
+        // Bonuses are not stored on offers anymore; model them as compensation lines when captured.
 
         EmployeeCompensation saved = employeeCompensationRepository.save(c);
         compensationService.syncToSalaryStructure(saved.getId());
