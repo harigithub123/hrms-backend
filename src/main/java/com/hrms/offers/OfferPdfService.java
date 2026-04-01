@@ -32,6 +32,11 @@ import static java.util.Objects.nonNull;
 public class OfferPdfService {
 
     private static final int FOOTER_HEIGHT = 50;
+    private static final float PAGE_MARGIN_LEFT = 40f;
+    private static final float PAGE_MARGIN_RIGHT = 40f;
+    private static final float PAGE_MARGIN_TOP = 40f;
+    /** Bottom margin includes footer space so body text never overlaps footer. */
+    private static final float PAGE_MARGIN_BOTTOM_WITH_FOOTER = 40f + FOOTER_HEIGHT;
 
     public byte[] build(JobOffer offer) throws IOException {
         OfferLetterPdfModel model = new OfferLetterPdfModel(
@@ -74,7 +79,14 @@ public class OfferPdfService {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
         try {
-            Document document = new Document(PageSize.A4, 40, 40, 40, 40 + FOOTER_HEIGHT);
+            // Reserve dedicated space for footer on every page.
+            Document document = new Document(
+                    PageSize.A4,
+                    PAGE_MARGIN_LEFT,
+                    PAGE_MARGIN_RIGHT,
+                    PAGE_MARGIN_TOP,
+                    PAGE_MARGIN_BOTTOM_WITH_FOOTER
+            );
             PdfWriter writer = PdfWriter.getInstance(document, baos);
 
             writer.setPageEvent(new FooterPageEvent());
@@ -143,7 +155,44 @@ public class OfferPdfService {
 
             document.add(new Paragraph(txt, normalFont));
             document.add(Chunk.NEWLINE);
-            // Salary Table
+
+            if (BigDecimal.ZERO.compareTo(data.joiningBonus()) > 0) {
+                document.add(new Paragraph(
+                        "As discussed, you will also receive a joining bonus of " + data.joiningBonus()  + " in first month salary.\n",
+                        normalFont));
+                document.add(Chunk.NEWLINE);
+            }
+
+            document.add(new Paragraph(
+                    "This letter constitutes an offer of employment and does not create an employer-employee relationship"
+                            + " until a formal employment agreement is executed.\n",
+                    normalFont));
+            document.add(Chunk.NEWLINE);
+
+            document.add(new Paragraph(
+                    "We are confident that your skills and experience will be a valuable addition to our organization,"
+                            +" and we look forward to your contribution.",
+                    normalFont));
+            document.add(Chunk.NEWLINE);
+
+            // Joining Date
+            document.add(new Paragraph(
+                    "Your expected joining date is: " + formatDate(data.joiningDate())+"\n",
+                    normalFont));
+            document.add(Chunk.NEWLINE);
+
+            // Closing
+            document.add(new Paragraph(
+                    "We look forward to welcoming you to the team.\n",
+                    normalFont));
+            document.add(Chunk.NEWLINE);
+
+            document.add(new Paragraph("Sincerely,", normalFont));
+            document.add(new Paragraph("Kambson Private Limited", boldFont));
+
+            // Salary table should always be on page 2.
+            document.newPage();
+
             document.add(new Paragraph("Compensation Details:", headerFont));
             document.add(Chunk.NEWLINE);
 
@@ -166,40 +215,7 @@ public class OfferPdfService {
             table.setSpacingAfter(20);
             document.add(table);
 
-            if (BigDecimal.ZERO.compareTo(data.joiningBonus()) > 0) {
-                document.add(new Paragraph(
-                        "As discussed, you will also receive a joining bonus of " + data.joiningBonus()  + " in first month salary.\n",
-                        normalFont));
-                document.add(Chunk.NEWLINE);
-            }
 
-            document.add(new Paragraph(
-                    "This letter constitutes an offer of employment and does not create an employer-employee relationship"
-                    + " until a formal employment agreement is executed.\n",
-                    normalFont));
-            document.add(Chunk.NEWLINE);
-
-            document.add(new Paragraph(
-                    "We are confident that your skills and experience will be a valuable addition to our organization,"
-                    +" and we look forward to your contribution.",
-                    normalFont));
-            document.add(Chunk.NEWLINE);
-
-            // Joining Date
-            document.add(new Paragraph(
-                    "Your expected joining date is: " + formatDate(data.joiningDate())+"\n",
-                    normalFont));
-            document.add(Chunk.NEWLINE);
-
-            // Closing
-            document.add(new Paragraph(
-                    "We look forward to welcoming you to the team.\n",
-                    normalFont));
-            document.add(Chunk.NEWLINE);
-            document.add(Chunk.NEWLINE);
-
-            document.add(new Paragraph("Sincerely,", normalFont));
-            document.add(new Paragraph("Kambson Private Limited", boldFont));
 
             document.close();
 
