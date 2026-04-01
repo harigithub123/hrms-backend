@@ -24,11 +24,6 @@ final class OfferCsvExporter {
                 "probationMonths",
                 "joiningBonus",
                 "yearlyBonus",
-                "sentAt",
-                "acceptedAt",
-                "rejectedAt",
-                "joinedAt",
-                "lastEmailStatus",
                 "employeeId"
         )).append("\n");
 
@@ -46,11 +41,6 @@ final class OfferCsvExporter {
                     .append(',').append(csv(o.probationPeriodMonths()))
                     .append(',').append(csv(o.joiningBonus() != null ? o.joiningBonus().toPlainString() : null))
                     .append(',').append(csv(o.yearlyBonus() != null ? o.yearlyBonus().toPlainString() : null))
-                    .append(',').append(csv(o.sentAt() != null ? o.sentAt().toString() : null))
-                    .append(',').append(csv(o.acceptedAt() != null ? o.acceptedAt().toString() : null))
-                    .append(',').append(csv(o.rejectedAt() != null ? o.rejectedAt().toString() : null))
-                    .append(',').append(csv(o.joinedAt() != null ? o.joinedAt().toString() : null))
-                    .append(',').append(csv(o.lastEmailStatus()))
                     .append(',').append(csv(o.employeeId()))
                     .append("\n");
         }

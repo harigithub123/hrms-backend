@@ -4,8 +4,8 @@ import com.hrms.offers.OfferStatus;
 import com.hrms.offers.entity.JobOffer;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Instant;
 
 public record OfferDto(
         Long id,
@@ -23,11 +23,6 @@ public record OfferDto(
         Integer probationPeriodMonths,
         BigDecimal joiningBonus,
         BigDecimal yearlyBonus,
-        Instant sentAt,
-        Instant acceptedAt,
-        Instant rejectedAt,
-        Instant joinedAt,
-        String lastEmailStatus,
         Long employeeId,
         Instant createdAt
 ) {
@@ -48,11 +43,6 @@ public record OfferDto(
                 o.getProbationPeriodMonths(),
                 o.getJoiningBonus(),
                 o.getYearlyBonus(),
-                o.getSentAt(),
-                o.getAcceptedAt(),
-                o.getRejectedAt(),
-                o.getJoinedAt(),
-                o.getLastEmailStatus(),
                 o.getEmployee() != null ? o.getEmployee().getId() : null,
                 o.getCreatedAt()
         );

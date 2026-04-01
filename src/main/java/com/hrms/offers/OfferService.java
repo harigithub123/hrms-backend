@@ -7,8 +7,10 @@ import com.hrms.compensation.entity.EmployeeCompensationLine;
 import com.hrms.compensation.repository.EmployeeCompensationRepository;
 import com.hrms.offers.dto.*;
 import com.hrms.offers.entity.JobOffer;
+import com.hrms.offers.entity.JobOfferEvent;
 import com.hrms.offers.entity.OfferCompensation;
 import com.hrms.offers.entity.OfferCompensationLine;
+import com.hrms.offers.repository.JobOfferEventRepository;
 import com.hrms.offers.repository.OfferCompensationRepository;
 import com.hrms.offers.repository.JobOfferRepository;
 import com.hrms.leave.repository.LeaveBalanceRepository;
@@ -45,6 +47,7 @@ import java.util.stream.Collectors;
 public class OfferService {
 
     private final JobOfferRepository jobOfferRepository;
+    private final JobOfferEventRepository jobOfferEventRepository;
     private final DepartmentRepository departmentRepository;
     private final DesignationRepository designationRepository;
     private final EmployeeRepository employeeRepository;
@@ -60,6 +63,7 @@ public class OfferService {
     public OfferService(
             OfferCompensationRepository offerCompensationRepository,
             JobOfferRepository jobOfferRepository,
+            JobOfferEventRepository jobOfferEventRepository,
             DepartmentRepository departmentRepository,
             DesignationRepository designationRepository,
             EmployeeRepository employeeRepository,
@@ -74,6 +78,7 @@ public class OfferService {
             LeaveBalanceRepository leaveBalanceRepository
     ) {
         this.jobOfferRepository = jobOfferRepository;
+        this.jobOfferEventRepository = jobOfferEventRepository;
         this.departmentRepository = departmentRepository;
         this.designationRepository = designationRepository;
         this.employeeRepository = employeeRepository;
@@ -185,8 +190,7 @@ public class OfferService {
         }
 
         o.setStatus(OfferStatus.SENT);
-        o.setSentAt(Instant.now());
-        o.setSentByUserId(u.getId());
+        recordEvent(o, forceResend ? OfferEventAction.RESENT : OfferEventAction.RELEASED, u.getId(), null);
         if (o.getOfferReleaseDate() == null) {
             o.setOfferReleaseDate(LocalDate.now());
         }
@@ -194,11 +198,9 @@ public class OfferService {
         OfferPdfDownload d = generatePdfDownload(id);
         try {
             offerEmailService.sendOffer(o.getCandidateEmail(), o.getCandidateName(), d.bytes(), d.filename());
-            o.setLastEmailStatus("SENT");
-            o.setLastEmailError(null);
+            recordEvent(o, OfferEventAction.EMAIL_SENT, u.getId(), null);
         } catch (Exception ex) {
-            o.setLastEmailStatus("FAILED");
-            o.setLastEmailError(truncate(ex.getMessage(), 2000));
+            recordEvent(o, OfferEventAction.EMAIL_FAILED, u.getId(), truncate(ex.getMessage(), 2000));
         }
 
         return OfferDto.from(jobOfferRepository.save(o));
@@ -276,8 +278,7 @@ public class OfferService {
             throw new IllegalArgumentException("Offer already joined");
         }
         o.setStatus(OfferStatus.ACCEPTED);
-        o.setAcceptedAt(Instant.now());
-        o.setAcceptedByUserId(u.getId());
+        recordEvent(o, OfferEventAction.ACCEPTED, u.getId(), null);
         return OfferDto.from(jobOfferRepository.save(o));
     }
 
@@ -291,8 +292,7 @@ public class OfferService {
             throw new IllegalArgumentException("Offer already joined");
         }
         o.setStatus(OfferStatus.REJECTED);
-        o.setRejectedAt(Instant.now());
-        o.setRejectedByUserId(u.getId());
+        recordEvent(o, OfferEventAction.REJECTED, u.getId(), null);
         return OfferDto.from(jobOfferRepository.save(o));
     }
 
@@ -330,8 +330,7 @@ public class OfferService {
 
         o.setEmployee(employeeRepository.getReferenceById(createdEmployee.id()));
         o.setStatus(OfferStatus.JOINED);
-        o.setJoinedAt(Instant.now());
-        o.setJoinedByUserId(u.getId());
+        recordEvent(o, OfferEventAction.JOINED, u.getId(), null);
 
         OfferCompensation offerComp = offerCompensationRepository.findByOfferId(o.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Offer compensation is required to create employee compensation"));
@@ -358,6 +357,15 @@ public class OfferService {
         compensationService.syncToSalaryStructure(saved.getId());
 
         return OfferDto.from(jobOfferRepository.save(o));
+    }
+
+    private void recordEvent(JobOffer offer, OfferEventAction action, Long byUserId, String remark) {
+        JobOfferEvent e = new JobOfferEvent();
+        e.setOffer(offer);
+        e.setAction(action);
+        e.setActionByUserId(byUserId);
+        e.setRemark(remark);
+        jobOfferEventRepository.save(e);
     }
 
     public record CsvExport(String filename, String csv) {}
