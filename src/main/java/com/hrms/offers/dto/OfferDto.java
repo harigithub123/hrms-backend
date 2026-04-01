@@ -3,7 +3,6 @@ package com.hrms.offers.dto;
 import com.hrms.offers.OfferStatus;
 import com.hrms.offers.entity.JobOffer;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.Instant;
 

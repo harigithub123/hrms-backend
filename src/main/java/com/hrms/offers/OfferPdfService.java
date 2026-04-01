@@ -75,7 +75,6 @@ public class OfferPdfService {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
         try {
-            // Reserve dedicated space for footer on every page.
             Document document = new Document(
                     PageSize.A4,
                     PAGE_MARGIN_LEFT,
