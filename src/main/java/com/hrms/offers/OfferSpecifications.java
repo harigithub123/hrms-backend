@@ -14,7 +14,7 @@ public final class OfferSpecifications {
     public static Specification<JobOffer> build(
             String status,
             String employeeType,
-            String q,
+            String searchQuery,
             Long departmentId,
             Long designationId
     ) {
@@ -33,8 +33,8 @@ public final class OfferSpecifications {
             if (designationId != null) {
                 preds.add(cb.equal(root.get("designation").get("id"), designationId));
             }
-            if (q != null && !q.isBlank()) {
-                String like = "%" + q.trim().toLowerCase() + "%";
+            if (searchQuery != null && !searchQuery.isBlank()) {
+                String like = "%" + searchQuery.trim().toLowerCase() + "%";
                 preds.add(cb.or(
                         cb.like(cb.lower(root.get("candidateName")), like),
                         cb.like(cb.lower(root.get("candidateEmail")), like)

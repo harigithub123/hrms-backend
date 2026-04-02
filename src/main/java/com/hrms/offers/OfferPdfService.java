@@ -1,5 +1,6 @@
 package com.hrms.offers;
 
+import com.hrms.offers.dto.OfferLetterPdfModel;
 import com.hrms.offers.entity.JobOffer;
 import com.itextpdf.text.Chunk;
 import com.itextpdf.text.Document;
@@ -21,8 +22,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-
-import static java.util.Objects.nonNull;
 
 /**
  * Renders offer text onto a fixed letterhead PDF (your company template). If no template is found,
@@ -54,20 +53,6 @@ public class OfferPdfService {
         );
         return generateOfferLetter(model);
     }
-
-    public record OfferLetterPdfModel(
-            String employeeType,
-            String employeeName,
-            String personalEmail,
-            String mobile,
-            LocalDate joiningDate,
-            LocalDate offerReleaseDate,
-            int probationMonths,
-            String designation,
-            String department,
-            BigDecimal annualCtc,
-            List<OfferCompLine> compensationLines
-    ) {}
 
     public record OfferCompLine(String componentLabel, BigDecimal amount) {}
 

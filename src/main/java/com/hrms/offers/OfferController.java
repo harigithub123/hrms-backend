@@ -24,73 +24,23 @@ public class OfferController {
         this.offerService = offerService;
     }
 
-    private static String toEmployeeTypeDisplayName(String employeeType) {
-        if (employeeType == null) return null;
-        return switch (employeeType) {
-            case "PERMANENT_FULL_TIME" -> "Permanent - Full time";
-            case "PERMANENT_PART_TIME" -> "Permanent - Part time";
-            case "CONTRACT" -> "Contract";
-            default -> employeeType;
-        };
-    }
-
     @GetMapping
     public List<OfferDto> listOffers() {
-        return offerService.listOffers().stream()
-                .map(o -> new OfferDto(
-                        o.id(),
-                        o.candidateName(),
-                        o.candidateEmail(),
-                        o.candidateMobile(),
-                        o.status(),
-                        toEmployeeTypeDisplayName(o.employeeType()),
-                        o.departmentId(),
-                        o.departmentName(),
-                        o.designationId(),
-                        o.designationName(),
-                        o.joiningDate(),
-                        o.offerReleaseDate(),
-                        o.actualJoiningDate(),
-                        o.probationPeriodMonths(),
-                        o.employeeId(),
-                        o.createdAt()
-                ))
-                .toList();
+        return offerService.listOffers();
     }
 
     @GetMapping("/paged")
     public Page<OfferDto> listOffersPaged(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String employeeType,
-            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String searchQuery,
             @RequestParam(required = false) Long departmentId,
             @RequestParam(required = false) Long designationId,
             @PageableDefault(size = 10, sort = "id") Pageable pageable
     ) {
-        return offerService.listOffersPaged(status, employeeType, q, departmentId, designationId, pageable)
-                .map(o -> new OfferDto(
-                        o.id(),
-                        o.candidateName(),
-                        o.candidateEmail(),
-                        o.candidateMobile(),
-                        o.status(),
-                        toEmployeeTypeDisplayName(o.employeeType()),
-                        o.departmentId(),
-                        o.departmentName(),
-                        o.designationId(),
-                        o.designationName(),
-                        o.joiningDate(),
-                        o.offerReleaseDate(),
-                        o.actualJoiningDate(),
-                        o.probationPeriodMonths(),
-                        o.employeeId(),
-                        o.createdAt()
-                ));
+        return offerService.listOffersPaged(status, employeeType, searchQuery, departmentId, designationId, pageable);
     }
 
-    /**
-     * Declared before {@code /{id}} so paths like {@code /api/offers/5/pdf} are not captured as id="5/pdf".
-     */
     @GetMapping("/{id:\\d+}/pdf")
     public ResponseEntity<byte[]> pdf(@PathVariable Long id) {
         OfferService.OfferPdfDownload d = offerService.generatePdfDownload(id);
@@ -112,11 +62,6 @@ public class OfferController {
     @PostMapping
     public OfferDto create(@Valid @RequestBody OfferCreateRequest req) {
         return offerService.createOffer(req);
-    }
-
-    @PostMapping("/{id:\\d+}/refresh-body")
-    public OfferDto refreshBody(@PathVariable Long id) {
-        return offerService.refreshBody(id);
     }
 
     @PostMapping("/{id:\\d+}/action")

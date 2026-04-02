@@ -1,5 +1,6 @@
 package com.hrms.offers.entity;
 
+import com.hrms.offers.EmployeeType;
 import com.hrms.offers.OfferStatus;
 import com.hrms.org.entity.Department;
 import com.hrms.org.entity.Designation;
@@ -30,8 +31,9 @@ public class JobOffer {
     @Column(nullable = false, length = 20)
     private OfferStatus status = OfferStatus.DRAFT;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "employee_type", length = 30)
-    private String employeeType;
+    private EmployeeType employeeType;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "department_id")
@@ -91,8 +93,8 @@ public class JobOffer {
     public void setCandidateMobile(String candidateMobile) { this.candidateMobile = candidateMobile; }
     public OfferStatus getStatus() { return status; }
     public void setStatus(OfferStatus status) { this.status = status; }
-    public String getEmployeeType() { return employeeType; }
-    public void setEmployeeType(String employeeType) { this.employeeType = employeeType; }
+    public EmployeeType getEmployeeType() { return employeeType; }
+    public void setEmployeeType(EmployeeType employeeType) { this.employeeType = employeeType; }
     public Department getDepartment() { return department; }
     public void setDepartment(Department department) { this.department = department; }
     public Designation getDesignation() { return designation; }

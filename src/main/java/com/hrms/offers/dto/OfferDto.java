@@ -1,5 +1,6 @@
 package com.hrms.offers.dto;
 
+import com.hrms.offers.EmployeeType;
 import com.hrms.offers.OfferStatus;
 import com.hrms.offers.entity.JobOffer;
 
@@ -12,7 +13,7 @@ public record OfferDto(
         String candidateEmail,
         String candidateMobile,
         OfferStatus status,
-        String employeeType,
+        EmployeeType employeeType,
         Long departmentId,
         String departmentName,
         Long designationId,

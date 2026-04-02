@@ -182,7 +182,7 @@ class OfferServiceTest {
         when(jobOfferRepository.save(any(JobOffer.class))).thenReturn(savedOffer);
 
         OfferCreateRequest request = new OfferCreateRequest(
-                "John Doe", "john@example.com", "9999999999", "PERMANENT", 1L, 1L,
+                "John Doe", "john@example.com", "9999999999", "PERMANENT_FULL_TIME", 1L, 1L,
                 LocalDate.now().plusMonths(1), 3, null, List.of()
         );
 
@@ -215,14 +215,14 @@ class OfferServiceTest {
         );
 
         OfferCreateRequest request = new OfferCreateRequest(
-                "John Doe", "john@example.com", "9999999999", "PERMANENT", 1L, 1L,
+                "John Doe", "john@example.com", "9999999999", "PERMANENT_FULL_TIME", 1L, 1L,
                 LocalDate.now().plusMonths(1), 3, null, lines
         );
 
         OfferDto result = offerService.createOffer(request);
 
         assertNotNull(result);
-        verify(jobOfferRepository, times(1)).save(any(JobOffer.class));
+        verify(jobOfferRepository, times(2)).save(any(JobOffer.class));
         verify(offerCompensationRepository, times(1)).save(any(OfferCompensation.class));
     }
 
@@ -241,7 +241,7 @@ class OfferServiceTest {
         );
 
         OfferCreateRequest request = new OfferCreateRequest(
-                "John Doe", "john@example.com", "9999999999", "PERMANENT", 1L, 1L,
+                "John Doe", "john@example.com", "9999999999", "PERMANENT_FULL_TIME", 1L, 1L,
                 LocalDate.now().plusMonths(1), 3, null, lines
         );
 
@@ -263,7 +263,7 @@ class OfferServiceTest {
         );
 
         OfferCreateRequest request = new OfferCreateRequest(
-                "John Doe", "john@example.com", "9999999999", "PERMANENT", 1L, 1L,
+                "John Doe", "john@example.com", "9999999999", "PERMANENT_FULL_TIME", 1L, 1L,
                 LocalDate.now().plusMonths(1), 3, null, lines
         );
 
@@ -282,34 +282,6 @@ class OfferServiceTest {
 
         assertThrows(ResponseStatusException.class, () -> offerService.createOffer(request));
     }
-
-    // ============ refreshBody Tests ============
-
-    @Test
-    void should_refreshBody_whenOfferExists() {
-        User hrUser = createHrAdminUser();
-        when(currentUserService.requireCurrentUser()).thenReturn(hrUser);
-        JobOffer offer = createJobOffer(1L, "John Doe", OfferStatus.DRAFT);
-        when(jobOfferRepository.findById(1L)).thenReturn(Optional.of(offer));
-        when(jobOfferRepository.save(offer)).thenReturn(offer);
-
-        OfferDto result = offerService.refreshBody(1L);
-
-        assertNotNull(result);
-        verify(jobOfferRepository, times(1)).findById(1L);
-        verify(jobOfferRepository, times(1)).save(offer);
-    }
-
-    @Test
-    void should_throwException_whenRefreshBodyOfferNotFound() {
-        User hrUser = createHrAdminUser();
-        when(currentUserService.requireCurrentUser()).thenReturn(hrUser);
-        when(jobOfferRepository.findById(999L)).thenReturn(Optional.empty());
-
-        assertThrows(IllegalArgumentException.class, () -> offerService.refreshBody(999L));
-    }
-
-    // ============ action Tests ============
 
     @Test
     void should_throwException_whenActionRequestIsNull() {
@@ -921,7 +893,7 @@ class OfferServiceTest {
         offer.setCandidateEmail("candidate@example.com");
         offer.setCandidateMobile("9999999999");
         offer.setStatus(status);
-        offer.setEmployeeType("PERMANENT");
+        offer.setEmployeeType(EmployeeType.PERMANENT_FULL_TIME);
         offer.setJoiningDate(LocalDate.now().plusMonths(1));
         offer.setProbationPeriodMonths(3);
         return offer;

@@ -98,13 +98,13 @@ public class OfferService {
     public Page<OfferDto> listOffersPaged(
             String status,
             String employeeType,
-            String q,
+            String searchQuery,
             Long departmentId,
             Long designationId,
             Pageable pageable
     ) {
         requireHrAdmin();
-        Specification<JobOffer> spec = OfferSpecifications.build(status, employeeType, q, departmentId, designationId);
+        Specification<JobOffer> spec = OfferSpecifications.build(status, employeeType, searchQuery, departmentId, designationId);
         return jobOfferRepository.findAll(spec, pageable).map(OfferDto::from);
     }
 
@@ -123,7 +123,7 @@ public class OfferService {
         o.setCandidateName(req.candidateName().trim());
         o.setCandidateEmail(req.candidateEmail());
         o.setCandidateMobile(req.candidateMobile());
-        o.setEmployeeType(req.employeeType());
+        o.setEmployeeType(EmployeeType.fromStringOrThrow(req.employeeType()));
         o.setDepartment(req.departmentId() != null ? departmentRepository.getReferenceById(req.departmentId()) : null);
         o.setDesignation(req.designationId() != null ? designationRepository.getReferenceById(req.designationId()) : null);
         o.setJoiningDate(req.joiningDate());
@@ -134,7 +134,7 @@ public class OfferService {
         List<OfferCompensationLineRequest> lines = req.compensationLines() != null ? req.compensationLines() : List.of();
         BigDecimal annualCtc = req.annualCtc();
         if (annualCtc == null && !lines.isEmpty()) {
-            annualCtc = calculateAnnualCtcFromRequestLines(lines);
+            annualCtc = calculateAnnualCtc(lines);
         }
 
         if (annualCtc != null) {
@@ -162,29 +162,11 @@ public class OfferService {
         return OfferDto.from(saved);
     }
 
-    private BigDecimal calculateAnnualCtc(List<OfferCompensationLine> lines) {
-        return lines.stream()
-                //.filter(line -> line.getComponent().isIncludedInCtc()) // TODO::
-                .map(this::toAnnualAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal calculateAnnualCtcFromRequestLines(List<OfferCompensationLineRequest> lines) {
+    private BigDecimal calculateAnnualCtc(List<OfferCompensationLineRequest> lines) {
         return lines.stream()
                 .map(this::toAnnualAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal toAnnualAmount(OfferCompensationLine line) {
-        BigDecimal amount = line.getAmount() != null ? line.getAmount() : BigDecimal.ZERO;
-
-        return switch (line.getFrequency()) {
-            case MONTHLY -> amount.multiply(BigDecimal.valueOf(12));
-            case YEARLY -> amount;
-            case ONE_TIME -> amount; // adjust if needed
-        };
     }
 
     private BigDecimal toAnnualAmount(OfferCompensationLineRequest line) {
@@ -192,17 +174,8 @@ public class OfferService {
 
         return switch (line.frequency()) {
             case MONTHLY -> amount.multiply(BigDecimal.valueOf(12));
-            case YEARLY -> amount;
-            case ONE_TIME -> amount; // adjust if needed
+            case YEARLY, ONE_TIME -> amount;
         };
-    }
-
-    @Transactional
-    public OfferDto refreshBody(Long id) {
-        requireHrAdmin();
-        JobOffer o = jobOfferRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Offer not found: " + id));
-        return OfferDto.from(jobOfferRepository.save(o));
     }
 
     @Transactional
@@ -250,21 +223,15 @@ public class OfferService {
         return OfferDto.from(jobOfferRepository.save(o));
     }
 
-    /**
-     * Filename pattern: {@code {24hex}_{CandidateName}_Offer_Letter_{yyyyMMdd}_{HHmmss}.pdf}
-     * (e.g. {@code 1642233994a61e2806cb4250_HariNale_Offer_Letter_20220115_133603.pdf})
-     * <p>PDF bytes are built outside a DB transaction so long-running work does not hold connections.</p>
-     */
     @Transactional
     public OfferPdfDownload generatePdfDownload(Long id) {
         requireHrAdmin();
-        JobOffer o = jobOfferRepository.findWithDepartmentAndDesignationById(id)
+        JobOffer jobOffer = jobOfferRepository.findWithDepartmentAndDesignationById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Offer not found: " + id));
-        jobOfferRepository.save(o);
-        OfferCompensation comp = offerCompensationRepository.findByOfferId(o.getId()).orElse(null);
+        OfferCompensation comp = offerCompensationRepository.findByOfferId(jobOffer.getId()).orElse(null);
         List<OfferPdfService.OfferCompLine> lines = List.of();
         if (comp != null && comp.getOfferCompensationLine() != null && !comp.getOfferCompensationLine().isEmpty()) {
-            String currency = comp.getCurrency() != null ? comp.getCurrency() : (o.getCurrency() != null ? o.getCurrency() : "");
+            String currency = comp.getCurrency() != null ? comp.getCurrency() : (jobOffer.getCurrency() != null ? jobOffer.getCurrency() : "");
             lines = comp.getOfferCompensationLine().stream().map(l -> {
                 String label = l.getComponent() != null
                         ? l.getComponent().getName()
@@ -272,24 +239,24 @@ public class OfferService {
                 return new OfferPdfService.OfferCompLine(label, l.getAmount());
             }).toList();
         }
-        OfferPdfService.OfferLetterPdfModel model = new OfferPdfService.OfferLetterPdfModel(
-                o.getEmployeeType(),
-                o.getCandidateName(),
-                o.getCandidateEmail(),
-                o.getCandidateMobile(),
-                o.getJoiningDate(),
-                o.getOfferReleaseDate(),
-                o.getProbationPeriodMonths() != null ? o.getProbationPeriodMonths() : 0,
-                o.getDesignation() != null ? o.getDesignation().getName() : "—",
-                o.getDepartment() != null ? o.getDepartment().getName() : "—",
-                o.getAnnualCtc(),
+        OfferLetterPdfModel model = new OfferLetterPdfModel(
+                jobOffer.getEmployeeType(),
+                jobOffer.getCandidateName(),
+                jobOffer.getCandidateEmail(),
+                jobOffer.getCandidateMobile(),
+                jobOffer.getJoiningDate(),
+                jobOffer.getOfferReleaseDate(),
+                jobOffer.getProbationPeriodMonths() != null ? jobOffer.getProbationPeriodMonths() : 0,
+                jobOffer.getDesignation() != null ? jobOffer.getDesignation().getName() : "—",
+                jobOffer.getDepartment() != null ? jobOffer.getDepartment().getName() : "—",
+                jobOffer.getAnnualCtc(),
                 lines
         );
         byte[] pdf = offerPdfService.generateOfferLetter(model);
 //        transactionTemplate.executeWithoutResult(status -> {
-////            o = jobOfferRepository.findById(id)
+////            jobOffer = jobOfferRepository.findById(id)
 ////                    .orElseThrow(() -> new IllegalArgumentException("Offer not found: " + id));
-////            o.setPdfGeneratedAt(Instant.now()); TODO:: check why we need this code.
+////            jobOffer.setPdfGeneratedAt(Instant.now()); TODO:: check why we need this code.
 //        });
         return new OfferPdfDownload(pdf, buildOfferPdfFilename(model.employeeName()));
     }
@@ -342,43 +309,43 @@ public class OfferService {
     public OfferDto markJoined(Long id, @Valid MarkJoinedRequest body) {
         requireHrAdmin();
         User u = currentUserService.requireCurrentUser();
-        JobOffer o = jobOfferRepository.findById(id)
+        JobOffer offer = jobOfferRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Offer not found: " + id));
         if (body == null || body.actualJoiningDate() == null) {
             throw new IllegalArgumentException("Actual joining date is required");
         }
-        if (o.getStatus() != OfferStatus.ACCEPTED) {
+        if (offer.getStatus() != OfferStatus.ACCEPTED) {
             throw new IllegalArgumentException("Only accepted offers can be marked joined");
         }
-        if (o.getEmployee() != null) {
+        if (offer.getEmployee() != null) {
             throw new IllegalArgumentException("Employee already created for this offer");
         }
-        if (o.getCandidateEmail() == null || o.getCandidateEmail().isBlank()) {
+        if (offer.getCandidateEmail() == null || offer.getCandidateEmail().isBlank()) {
             throw new IllegalArgumentException("Candidate email is required to create employee");
         }
-        if (o.getCandidateMobile() == null || o.getCandidateMobile().isBlank()) {
+        if (offer.getCandidateMobile() == null || offer.getCandidateMobile().isBlank()) {
             throw new IllegalArgumentException("Candidate mobile number is required to create employee");
         }
 
-        NameParts np = splitName(o.getCandidateName());
+        NameParts np = splitName(offer.getCandidateName());
         EmployeeRequest empReq = new EmployeeRequest(
                 null,
                 np.firstName(),
                 np.lastName(),
-                o.getCandidateEmail(),
-                o.getCandidateMobile(),
-                o.getDepartment() != null ? o.getDepartment().getId() : null,
-                o.getDesignation() != null ? o.getDesignation().getId() : null,
+                offer.getCandidateEmail(),
+                offer.getCandidateMobile(),
+                offer.getDepartment() != null ? offer.getDepartment().getId() : null,
+                offer.getDesignation() != null ? offer.getDesignation().getId() : null,
                 body.actualJoiningDate()
         );
         var createdEmployee = employeeService.create(empReq);
 
-        o.setEmployee(employeeRepository.getReferenceById(createdEmployee.id()));
-        o.setStatus(OfferStatus.JOINED);
-        o.setActualJoiningDate(body.actualJoiningDate());
-        recordEvent(o, OfferEventAction.JOINED, u.getId(), null);
+        offer.setEmployee(employeeRepository.getReferenceById(createdEmployee.id()));
+        offer.setStatus(OfferStatus.JOINED);
+        offer.setActualJoiningDate(body.actualJoiningDate());
+        recordEvent(offer, OfferEventAction.JOINED, u.getId(), null);
 
-        OfferCompensation offerComp = offerCompensationRepository.findByOfferId(o.getId())
+        OfferCompensation offerComp = offerCompensationRepository.findByOfferId(offer.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Offer compensation is required to create employee compensation"));
         if (offerComp.getOfferCompensationLine() == null || offerComp.getOfferCompensationLine().isEmpty()) {
             throw new IllegalArgumentException("Offer compensation lines are required");
@@ -386,10 +353,10 @@ public class OfferService {
 
         EmployeeCompensation c = new EmployeeCompensation();
         c.setEmployee(employeeRepository.getReferenceById(createdEmployee.id()));
-        LocalDate eff = body.compensationEffectiveFrom() != null ? body.compensationEffectiveFrom() : body.actualJoiningDate();
-        c.setEffectiveFrom(eff);
-        c.setCurrency(offerComp.getCurrency() != null ? offerComp.getCurrency() : (o.getCurrency() != null ? o.getCurrency() : "INR"));
-        c.setNotes("Created from offer #" + o.getId());
+        LocalDate effectiveDate = body.compensationEffectiveFrom() != null ? body.compensationEffectiveFrom() : body.actualJoiningDate();
+        c.setEffectiveFrom(effectiveDate);
+        c.setCurrency(offerComp.getCurrency() != null ? offerComp.getCurrency() : (offer.getCurrency() != null ? offer.getCurrency() : "INR"));
+        c.setNotes("Created from offer #" + offer.getId());
 
         for (OfferCompensationLine ol : offerComp.getOfferCompensationLine()) {
             EmployeeCompensationLine nl = new EmployeeCompensationLine();
@@ -404,7 +371,7 @@ public class OfferService {
         EmployeeCompensation saved = employeeCompensationRepository.save(c);
         compensationService.syncToSalaryStructure(saved.getId());
 
-        return OfferDto.from(jobOfferRepository.save(o));
+        return OfferDto.from(jobOfferRepository.save(offer));
     }
 
     private void recordEvent(JobOffer offer, OfferEventAction action, Long byUserId, String remark) {
