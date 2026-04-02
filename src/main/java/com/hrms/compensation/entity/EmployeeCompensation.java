@@ -1,9 +1,11 @@
 package com.hrms.compensation.entity;
 
+import com.hrms.compensation.dto.CompensationLineDto;
 import com.hrms.org.entity.Employee;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -63,4 +65,24 @@ public class EmployeeCompensation {
     public void setNotes(String notes) { this.notes = notes; }
     public Instant getCreatedAt() { return createdAt; }
     public List<EmployeeCompensationLine> getLines() { return lines; }
+
+    public BigDecimal calculateAnnualCtc() {
+        return lines.stream()
+                .map(this::toAnnualAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal toAnnualAmount(EmployeeCompensationLine line) {
+        BigDecimal amount = safe(line.getAmount());
+
+        return switch (line.getFrequency()) {
+            case MONTHLY -> amount.multiply(BigDecimal.valueOf(12));
+            case YEARLY, ONE_TIME -> amount;
+        };
+    }
+
+    private BigDecimal safe(BigDecimal val) {
+        return val == null ? BigDecimal.ZERO : val;
+    }
 }

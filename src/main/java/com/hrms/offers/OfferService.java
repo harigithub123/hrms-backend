@@ -13,8 +13,6 @@ import com.hrms.offers.entity.OfferCompensationLine;
 import com.hrms.offers.repository.JobOfferEventRepository;
 import com.hrms.offers.repository.OfferCompensationRepository;
 import com.hrms.offers.repository.JobOfferRepository;
-import com.hrms.leave.repository.LeaveBalanceRepository;
-import com.hrms.leave.repository.LeaveTypeRepository;
 import com.hrms.org.EmployeeRequest;
 import com.hrms.org.EmployeeService;
 import com.hrms.org.repository.DepartmentRepository;
@@ -33,13 +31,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
-import java.time.Instant;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -73,9 +69,7 @@ public class OfferService {
             OfferEmailService offerEmailService,
             EmployeeService employeeService,
             EmployeeCompensationRepository employeeCompensationRepository,
-            CompensationService compensationService,
-            LeaveTypeRepository leaveTypeRepository,
-            LeaveBalanceRepository leaveBalanceRepository
+            CompensationService compensationService
     ) {
         this.jobOfferRepository = jobOfferRepository;
         this.jobOfferEventRepository = jobOfferEventRepository;
@@ -138,32 +132,69 @@ public class OfferService {
         JobOffer saved = jobOfferRepository.save(o);
 
         List<OfferCompensationLineRequest> lines = req.compensationLines() != null ? req.compensationLines() : List.of();
-        if (!lines.isEmpty()) {
-            Map<Long, BigDecimal> uniqueLines = new LinkedHashMap<>();
-            for (OfferCompensationLineRequest lr : lines) {
-                if (lr == null || lr.componentId() == null) continue;
-                BigDecimal amt = lr.amount() != null ? lr.amount() : BigDecimal.ZERO;
-                uniqueLines.merge(lr.componentId(), amt, BigDecimal::add);
-            }
-            if (uniqueLines.isEmpty()) {
-                return OfferDto.from(saved);
-            }
+        BigDecimal annualCtc = req.annualCtc();
+        if (annualCtc == null && !lines.isEmpty()) {
+            annualCtc = calculateAnnualCtcFromRequestLines(lines);
+        }
 
+        if (annualCtc != null) {
+            saved.setAnnualCtc(annualCtc.setScale(2, RoundingMode.HALF_UP));
+            saved = jobOfferRepository.save(saved);
+        }
+
+        if (!lines.isEmpty()) {
             OfferCompensation comp = new OfferCompensation();
+            comp.setAnnualCtc(saved.getAnnualCtc() != null ? saved.getAnnualCtc() : BigDecimal.ZERO);
             comp.setOffer(saved);
             comp.setCurrency(saved.getCurrency() != null ? saved.getCurrency() : "INR");
-            for (Map.Entry<Long, BigDecimal> e : uniqueLines.entrySet()) {
-                SalaryComponent sc = salaryComponentRepository.findById(e.getKey())
-                        .orElseThrow(() -> new IllegalArgumentException("Salary component not found: " + e.getKey()));
+            for (OfferCompensationLineRequest requestLine : lines) {
+                SalaryComponent sc = salaryComponentRepository.findById(requestLine.componentId())
+                        .orElseThrow(() -> new IllegalArgumentException("Salary component not found: " + requestLine.componentId()));
                 OfferCompensationLine line = new OfferCompensationLine();
                 line.setCompensation(comp);
                 line.setComponent(sc);
-                line.setAmount(e.getValue());
+                line.setAmount(requestLine.amount());
+                line.setFrequency(requestLine.frequency());
                 comp.getOfferCompensationLine().add(line);
             }
             offerCompensationRepository.save(comp);
         }
         return OfferDto.from(saved);
+    }
+
+    private BigDecimal calculateAnnualCtc(List<OfferCompensationLine> lines) {
+        return lines.stream()
+                //.filter(line -> line.getComponent().isIncludedInCtc()) // TODO::
+                .map(this::toAnnualAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal calculateAnnualCtcFromRequestLines(List<OfferCompensationLineRequest> lines) {
+        return lines.stream()
+                .map(this::toAnnualAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal toAnnualAmount(OfferCompensationLine line) {
+        BigDecimal amount = line.getAmount() != null ? line.getAmount() : BigDecimal.ZERO;
+
+        return switch (line.getFrequency()) {
+            case MONTHLY -> amount.multiply(BigDecimal.valueOf(12));
+            case YEARLY -> amount;
+            case ONE_TIME -> amount; // adjust if needed
+        };
+    }
+
+    private BigDecimal toAnnualAmount(OfferCompensationLineRequest line) {
+        BigDecimal amount = line.amount() != null ? line.amount() : BigDecimal.ZERO;
+
+        return switch (line.frequency()) {
+            case MONTHLY -> amount.multiply(BigDecimal.valueOf(12));
+            case YEARLY -> amount;
+            case ONE_TIME -> amount; // adjust if needed
+        };
     }
 
     @Transactional
@@ -365,10 +396,11 @@ public class OfferService {
             nl.setCompensation(c);
             nl.setComponent(ol.getComponent());
             nl.setAmount(ol.getAmount() != null ? ol.getAmount() : BigDecimal.ZERO);
-            nl.setFrequency(com.hrms.compensation.CompensationFrequency.MONTHLY);
+            nl.setFrequency(ol.getFrequency() != null ? ol.getFrequency() : com.hrms.compensation.CompensationFrequency.MONTHLY);
             c.getLines().add(nl);
         }
 
+        c.setAnnualCtc(c.calculateAnnualCtc());
         EmployeeCompensation saved = employeeCompensationRepository.save(c);
         compensationService.syncToSalaryStructure(saved.getId());
 
