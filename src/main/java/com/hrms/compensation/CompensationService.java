@@ -54,16 +54,37 @@ public class CompensationService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Optional filters: both null returns all compensations (newest first).
+     * Employee only: all packages for that employee.
+     * Effective date only: all packages active on that date (any employee).
+     * Both: packages active for that employee on that date.
+     */
     @Transactional(readOnly = true)
-    public List<CompensationDto> listActiveAsOf(Long employeeId, java.time.LocalDate asOf) {
+    public List<CompensationDto> search(Long employeeId, java.time.LocalDate effectiveDate) {
         requireHrAdmin();
-        if (!employeeRepository.existsById(employeeId)) {
-            throw new IllegalArgumentException("Employee not found: " + employeeId);
+        if (employeeId != null && effectiveDate != null) {
+            if (!employeeRepository.existsById(employeeId)) {
+                throw new IllegalArgumentException("Employee not found: " + employeeId);
+            }
+            return compensationRepository.findActiveAsOf(employeeId, effectiveDate).stream()
+                    .map(this::toDto)
+                    .toList();
         }
-        if (asOf == null) {
-            throw new IllegalArgumentException("Effective date is required");
+        if (employeeId != null) {
+            if (!employeeRepository.existsById(employeeId)) {
+                throw new IllegalArgumentException("Employee not found: " + employeeId);
+            }
+            return compensationRepository.findByEmployeeIdOrderByEffectiveFromDesc(employeeId).stream()
+                    .map(this::toDto)
+                    .toList();
         }
-        return compensationRepository.findActiveAsOf(employeeId, asOf).stream()
+        if (effectiveDate != null) {
+            return compensationRepository.findAllActiveAsOf(effectiveDate).stream()
+                    .map(this::toDto)
+                    .toList();
+        }
+        return compensationRepository.findAllOrderByEffectiveFromDesc().stream()
                 .map(this::toDto)
                 .toList();
     }

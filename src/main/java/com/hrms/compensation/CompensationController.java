@@ -4,6 +4,7 @@ import com.hrms.compensation.dto.CompensationCreateRequest;
 import com.hrms.compensation.dto.CompensationDto;
 import com.hrms.payroll.dto.SalaryStructureDto;
 import jakarta.validation.Valid;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -28,10 +29,10 @@ public class CompensationController {
 
     @GetMapping("/search")
     public List<CompensationDto> search(
-            @RequestParam Long employeeId,
-            @RequestParam LocalDate effectiveDate
+            @RequestParam(required = false) Long employeeId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate effectiveDate
     ) {
-        return compensationService.listActiveAsOf(employeeId, effectiveDate);
+        return compensationService.search(employeeId, effectiveDate);
     }
 
     @PostMapping
