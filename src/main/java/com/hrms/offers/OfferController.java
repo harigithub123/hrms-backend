@@ -24,9 +24,38 @@ public class OfferController {
         this.offerService = offerService;
     }
 
+    private static String toEmployeeTypeDisplayName(String employeeType) {
+        if (employeeType == null) return null;
+        return switch (employeeType) {
+            case "PERMANENT_FULL_TIME" -> "Permanent - Full time";
+            case "PERMANENT_PART_TIME" -> "Permanent - Part time";
+            case "CONTRACT" -> "Contract";
+            default -> employeeType;
+        };
+    }
+
     @GetMapping
     public List<OfferDto> listOffers() {
-        return offerService.listOffers();
+        return offerService.listOffers().stream()
+                .map(o -> new OfferDto(
+                        o.id(),
+                        o.candidateName(),
+                        o.candidateEmail(),
+                        o.candidateMobile(),
+                        o.status(),
+                        toEmployeeTypeDisplayName(o.employeeType()),
+                        o.departmentId(),
+                        o.departmentName(),
+                        o.designationId(),
+                        o.designationName(),
+                        o.joiningDate(),
+                        o.offerReleaseDate(),
+                        o.actualJoiningDate(),
+                        o.probationPeriodMonths(),
+                        o.employeeId(),
+                        o.createdAt()
+                ))
+                .toList();
     }
 
     @GetMapping("/paged")
@@ -38,7 +67,25 @@ public class OfferController {
             @RequestParam(required = false) Long designationId,
             @PageableDefault(size = 10, sort = "id") Pageable pageable
     ) {
-        return offerService.listOffersPaged(status, employeeType, q, departmentId, designationId, pageable);
+        return offerService.listOffersPaged(status, employeeType, q, departmentId, designationId, pageable)
+                .map(o -> new OfferDto(
+                        o.id(),
+                        o.candidateName(),
+                        o.candidateEmail(),
+                        o.candidateMobile(),
+                        o.status(),
+                        toEmployeeTypeDisplayName(o.employeeType()),
+                        o.departmentId(),
+                        o.departmentName(),
+                        o.designationId(),
+                        o.designationName(),
+                        o.joiningDate(),
+                        o.offerReleaseDate(),
+                        o.actualJoiningDate(),
+                        o.probationPeriodMonths(),
+                        o.employeeId(),
+                        o.createdAt()
+                ));
     }
 
     /**
