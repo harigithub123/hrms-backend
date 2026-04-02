@@ -358,7 +358,6 @@ public class OfferService {
         LocalDate eff = body.compensationEffectiveFrom() != null ? body.compensationEffectiveFrom() : body.actualJoiningDate();
         c.setEffectiveFrom(eff);
         c.setCurrency(offerComp.getCurrency() != null ? offerComp.getCurrency() : (o.getCurrency() != null ? o.getCurrency() : "INR"));
-        c.setAnnualCtc(offerComp.getAnnualCtc() != null ? offerComp.getAnnualCtc() : o.getAnnualCtc());
         c.setNotes("Created from offer #" + o.getId());
 
         for (OfferCompensationLine ol : offerComp.getOfferCompensationLine()) {
@@ -369,8 +368,6 @@ public class OfferService {
             nl.setFrequency(com.hrms.compensation.CompensationFrequency.MONTHLY);
             c.getLines().add(nl);
         }
-
-        // Bonuses are not stored on offers anymore; model them as compensation lines when captured.
 
         EmployeeCompensation saved = employeeCompensationRepository.save(c);
         compensationService.syncToSalaryStructure(saved.getId());

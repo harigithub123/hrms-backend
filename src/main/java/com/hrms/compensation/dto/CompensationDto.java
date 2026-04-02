@@ -5,6 +5,7 @@ import com.hrms.compensation.entity.EmployeeCompensation;
 import com.hrms.compensation.entity.EmployeeCompensationLine;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -23,8 +24,6 @@ public record CompensationDto(
         Instant createdAt,
         List<CompensationLineDto> lines
 ) {
-    private static final String CODE_ANNUAL_BONUS = "ANNUAL_BONUS";
-    private static final String CODE_JOINING_BONUS = "JOINING_BONUS";
 
     public static CompensationDto from(EmployeeCompensation c) {
         List<EmployeeCompensationLine> rawLines = c.getLines();
@@ -48,6 +47,26 @@ public record CompensationDto(
         );
     }
 
+    public BigDecimal calculateAnnualCtc() {
+        return lines.stream()
+                .map(this::toAnnualAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal toAnnualAmount(CompensationLineDto line) {
+        BigDecimal amount = safe(line.amount());
+
+        return switch (line.frequency()) {
+            case MONTHLY -> amount.multiply(BigDecimal.valueOf(12));
+            case YEARLY, ONE_TIME -> amount;
+        };
+    }
+
+    private BigDecimal safe(BigDecimal val) {
+        return val == null ? BigDecimal.ZERO : val;
+    }
+
     private static String employeeDisplayName(EmployeeCompensation c) {
         var e = c.getEmployee();
         if (e == null) {
@@ -60,16 +79,14 @@ public record CompensationDto(
 
     private static BigDecimal sumAnnualBonus(List<EmployeeCompensationLine> lines) {
         return lines.stream()
-                .filter(l -> l.getFrequency() == CompensationFrequency.YEARLY
-                        && CODE_ANNUAL_BONUS.equals(l.getComponent().getCode()))
+                .filter(l -> l.getFrequency() == CompensationFrequency.YEARLY)
                 .map(EmployeeCompensationLine::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private static BigDecimal sumJoiningBonus(List<EmployeeCompensationLine> lines) {
         return lines.stream()
-                .filter(l -> l.getFrequency() == CompensationFrequency.ONE_TIME
-                        && CODE_JOINING_BONUS.equals(l.getComponent().getCode()))
+                .filter(l -> l.getFrequency() == CompensationFrequency.ONE_TIME)
                 .map(EmployeeCompensationLine::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
