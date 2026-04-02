@@ -2,7 +2,6 @@ package com.hrms.compensation;
 
 import com.hrms.compensation.dto.CompensationCreateRequest;
 import com.hrms.compensation.dto.CompensationDto;
-import com.hrms.payroll.dto.SalaryStructureDto;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -38,10 +37,5 @@ public class CompensationController {
     @PostMapping
     public CompensationDto create(@Valid @RequestBody CompensationCreateRequest req) {
         return compensationService.create(req);
-    }
-
-    @PostMapping("/{id}/sync-structure")
-    public SalaryStructureDto sync(@PathVariable Long id) {
-        return compensationService.syncToSalaryStructure(id);
     }
 }

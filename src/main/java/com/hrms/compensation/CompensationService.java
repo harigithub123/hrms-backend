@@ -7,8 +7,6 @@ import com.hrms.compensation.entity.EmployeeCompensationLine;
 import com.hrms.compensation.repository.EmployeeCompensationRepository;
 import com.hrms.org.repository.EmployeeRepository;
 import com.hrms.payroll.PayrollService;
-import com.hrms.payroll.dto.SalaryStructureLineRequest;
-import com.hrms.payroll.dto.SalaryStructureRequest;
 import com.hrms.payroll.entity.SalaryComponent;
 import com.hrms.payroll.repository.SalaryComponentRepository;
 import com.hrms.security.CurrentUserService;
@@ -116,26 +114,6 @@ public class CompensationService {
         return toDto(compensationRepository.save(c));
     }
 
-    @Transactional
-    public com.hrms.payroll.dto.SalaryStructureDto syncToSalaryStructure(Long compensationId) {
-        requireHrAdmin();
-        EmployeeCompensation c = compensationRepository.findById(compensationId)
-                .orElseThrow(() -> new IllegalArgumentException("Compensation not found: " + compensationId));
-        List<SalaryStructureLineRequest> lines = c.getLines().stream()
-                .map(l -> new SalaryStructureLineRequest(l.getComponent().getId(), l.getAmount()))
-                .toList();
-        if (lines.isEmpty()) {
-            throw new IllegalArgumentException("No compensation lines to sync");
-        }
-        SalaryStructureRequest req = new SalaryStructureRequest(
-                c.getEmployee().getId(),
-                c.getEffectiveFrom(),
-                c.getCurrency(),
-                "Synced from compensation #" + c.getId(),
-                lines
-        );
-        return payrollService.saveStructure(req);
-    }
 
     private CompensationDto toDto(EmployeeCompensation c) {
         return CompensationDto.from(c);

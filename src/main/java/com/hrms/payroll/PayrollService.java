@@ -6,6 +6,10 @@ import com.hrms.advance.entity.SalaryAdvance;
 import com.hrms.advance.repository.PayslipAdvanceDeductionRepository;
 import com.hrms.advance.repository.SalaryAdvanceRepository;
 import com.hrms.auth.entity.User;
+import com.hrms.compensation.CompensationFrequency;
+import com.hrms.compensation.entity.EmployeeCompensation;
+import com.hrms.compensation.entity.EmployeeCompensationLine;
+import com.hrms.compensation.repository.EmployeeCompensationRepository;
 import com.hrms.org.repository.EmployeeRepository;
 import com.hrms.payroll.dto.*;
 import com.hrms.payroll.entity.*;
@@ -30,7 +34,7 @@ import java.util.stream.Collectors;
 public class PayrollService {
 
     private final SalaryComponentRepository salaryComponentRepository;
-    private final EmployeeSalaryStructureRepository structureRepository;
+    private final EmployeeCompensationRepository compensationRepository;
     private final PayRunRepository payRunRepository;
     private final PayslipRepository payslipRepository;
     private final EmployeeRepository employeeRepository;
@@ -41,7 +45,7 @@ public class PayrollService {
 
     public PayrollService(
             SalaryComponentRepository salaryComponentRepository,
-            EmployeeSalaryStructureRepository structureRepository,
+            EmployeeCompensationRepository compensationRepository,
             PayRunRepository payRunRepository,
             PayslipRepository payslipRepository,
             EmployeeRepository employeeRepository,
@@ -51,7 +55,7 @@ public class PayrollService {
             PayslipAdvanceDeductionRepository payslipAdvanceDeductionRepository
     ) {
         this.salaryComponentRepository = salaryComponentRepository;
-        this.structureRepository = structureRepository;
+        this.compensationRepository = compensationRepository;
         this.payRunRepository = payRunRepository;
         this.payslipRepository = payslipRepository;
         this.employeeRepository = employeeRepository;
@@ -102,48 +106,6 @@ public class PayrollService {
         return SalaryComponentDto.from(salaryComponentRepository.save(c));
     }
 
-    @Transactional
-    public SalaryStructureDto saveStructure(SalaryStructureRequest req) {
-        requireHrAdmin();
-        if (!employeeRepository.existsById(req.employeeId())) {
-            throw new IllegalArgumentException("Employee not found: " + req.employeeId());
-        }
-        EmployeeSalaryStructure s = new EmployeeSalaryStructure();
-        s.setEmployee(employeeRepository.getReferenceById(req.employeeId()));
-        s.setEffectiveFrom(req.effectiveFrom());
-        s.setCurrency(req.currency() != null && !req.currency().isBlank() ? req.currency().trim() : "INR");
-        s.setNote(req.note());
-        for (SalaryStructureLineRequest lr : req.lines()) {
-            SalaryComponent comp = salaryComponentRepository.findById(lr.componentId())
-                    .orElseThrow(() -> new IllegalArgumentException("Salary component not found: " + lr.componentId()));
-            if (!comp.isActive()) {
-                throw new IllegalArgumentException("Salary component is inactive: " + comp.getCode());
-            }
-            if (lr.amount().compareTo(BigDecimal.ZERO) < 0) {
-                throw new IllegalArgumentException("Amount cannot be negative for component " + comp.getCode());
-            }
-            EmployeeSalaryStructureLine line = new EmployeeSalaryStructureLine();
-            line.setStructure(s);
-            line.setComponent(comp);
-            line.setAmount(lr.amount());
-            s.getLines().add(line);
-        }
-        return SalaryStructureDto.from(structureRepository.save(s));
-    }
-
-    @Transactional(readOnly = true)
-    public SalaryStructureDto getLatestStructureForEmployee(Long employeeId, LocalDate asOf) {
-        requireHrAdmin();
-        if (!employeeRepository.existsById(employeeId)) {
-            throw new IllegalArgumentException("Employee not found: " + employeeId);
-        }
-        LocalDate d = asOf != null ? asOf : LocalDate.now();
-        List<EmployeeSalaryStructure> candidates = structureRepository.findCandidatesForPayroll(employeeId, d);
-        if (candidates.isEmpty()) {
-            throw new IllegalArgumentException("No salary structure for employee " + employeeId + " as of " + d);
-        }
-        return SalaryStructureDto.from(candidates.get(0));
-    }
 
     @Transactional
     public PayRunDto createPayRun(PayRunCreateRequest req) {
@@ -162,36 +124,51 @@ public class PayrollService {
 
         int generated = 0;
         for (var employee : employeeRepository.findAll()) {
-            List<EmployeeSalaryStructure> candidates =
-                    structureRepository.findCandidatesForPayroll(employee.getId(), req.periodEnd());
-            if (candidates.isEmpty() || candidates.get(0).getLines().isEmpty()) {
+            List<EmployeeCompensation> candidates =
+                    compensationRepository.findActiveAsOf(employee.getId(), req.periodEnd());
+            if (candidates.isEmpty()) {
                 continue;
             }
-            EmployeeSalaryStructure struct = candidates.get(0);
+            EmployeeCompensation compensation = candidates.get(0);
+            if (compensation.getLines().isEmpty()) {
+                continue;
+            }
+
             BigDecimal gross = BigDecimal.ZERO;
             BigDecimal deductions = BigDecimal.ZERO;
             List<PayslipLine> slipLines = new ArrayList<>();
-            for (EmployeeSalaryStructureLine sl : struct.getLines()) {
-                SalaryComponent comp = sl.getComponent();
+
+            for (EmployeeCompensationLine cl : compensation.getLines()) {
+                SalaryComponent comp = cl.getComponent();
                 if (!comp.isActive()) {
                     continue;
                 }
+
+                // Convert to monthly amount for payslip
+                BigDecimal monthlyAmount = convertToMonthlyAmount(cl);
+                if (monthlyAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                    continue;
+                }
+
                 PayslipLine pl = new PayslipLine();
                 pl.setComponent(comp);
                 pl.setComponentCode(comp.getCode());
                 pl.setComponentName(comp.getName());
                 pl.setKind(comp.getKind());
-                pl.setAmount(sl.getAmount());
+                pl.setAmount(monthlyAmount);
+
                 if (comp.getKind() == SalaryComponentKind.EARNING) {
-                    gross = gross.add(sl.getAmount());
+                    gross = gross.add(monthlyAmount);
                 } else {
-                    deductions = deductions.add(sl.getAmount());
+                    deductions = deductions.add(monthlyAmount);
                 }
                 slipLines.add(pl);
             }
+
             if (slipLines.isEmpty()) {
                 continue;
             }
+
             SalaryComponent advanceComp = salaryComponentRepository.findByCodeIgnoreCase("ADVANCE_RECOVERY").orElse(null);
             List<AdvanceRecovery> advanceRecoveries = new ArrayList<>();
             if (advanceComp != null) {
@@ -221,6 +198,7 @@ public class PayrollService {
                     advanceRecoveries.add(new AdvanceRecovery(adv.getId(), take));
                 }
             }
+
             BigDecimal net = gross.subtract(deductions);
             Payslip payslip = new Payslip();
             payslip.setPayRun(run);
@@ -233,6 +211,7 @@ public class PayrollService {
                 payslip.getLines().add(pl);
             }
             payslipRepository.save(payslip);
+
             for (AdvanceRecovery ar : advanceRecoveries) {
                 SalaryAdvance adv = salaryAdvanceRepository.findById(ar.advanceId())
                         .orElseThrow(() -> new IllegalStateException("Advance missing: " + ar.advanceId()));
@@ -253,13 +232,25 @@ public class PayrollService {
             }
             generated++;
         }
+
         if (generated == 0) {
             payRunRepository.delete(run);
-            throw new IllegalArgumentException("No employees with salary structure found for this period");
+            throw new IllegalArgumentException("No employees with compensation found for this period");
         }
         run.setStatus(PayRunStatus.FINALIZED);
         payRunRepository.save(run);
         return PayRunDto.from(run);
+    }
+
+    private BigDecimal convertToMonthlyAmount(EmployeeCompensationLine line) {
+        BigDecimal amount = line.getAmount() != null ? line.getAmount() : BigDecimal.ZERO;
+        CompensationFrequency freq = line.getFrequency() != null ? line.getFrequency() : CompensationFrequency.MONTHLY;
+
+        return switch (freq) {
+            case MONTHLY -> amount;
+            case YEARLY -> amount.divide(BigDecimal.valueOf(12), 2, java.math.RoundingMode.HALF_UP);
+            case ONE_TIME -> BigDecimal.ZERO; // One-time payments not included in regular payroll
+        };
     }
 
     @Transactional(readOnly = true)

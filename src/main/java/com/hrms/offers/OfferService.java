@@ -1,7 +1,6 @@
 package com.hrms.offers;
 
 import com.hrms.auth.entity.User;
-import com.hrms.compensation.CompensationService;
 import com.hrms.compensation.entity.EmployeeCompensation;
 import com.hrms.compensation.entity.EmployeeCompensationLine;
 import com.hrms.compensation.repository.EmployeeCompensationRepository;
@@ -54,7 +53,6 @@ public class OfferService {
     private final OfferEmailService offerEmailService;
     private final EmployeeService employeeService;
     private final EmployeeCompensationRepository employeeCompensationRepository;
-    private final CompensationService compensationService;
 
     public OfferService(
             OfferCompensationRepository offerCompensationRepository,
@@ -68,8 +66,7 @@ public class OfferService {
             SalaryComponentRepository salaryComponentRepository,
             OfferEmailService offerEmailService,
             EmployeeService employeeService,
-            EmployeeCompensationRepository employeeCompensationRepository,
-            CompensationService compensationService
+            EmployeeCompensationRepository employeeCompensationRepository
     ) {
         this.jobOfferRepository = jobOfferRepository;
         this.jobOfferEventRepository = jobOfferEventRepository;
@@ -83,7 +80,6 @@ public class OfferService {
         this.offerEmailService = offerEmailService;
         this.employeeService = employeeService;
         this.employeeCompensationRepository = employeeCompensationRepository;
-        this.compensationService = compensationService;
     }
 
     @Transactional(readOnly = true)
@@ -368,8 +364,7 @@ public class OfferService {
         }
 
         c.setAnnualCtc(c.calculateAnnualCtc());
-        EmployeeCompensation saved = employeeCompensationRepository.save(c);
-        compensationService.syncToSalaryStructure(saved.getId());
+        employeeCompensationRepository.save(c);
 
         return OfferDto.from(jobOfferRepository.save(offer));
     }

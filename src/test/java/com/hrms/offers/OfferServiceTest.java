@@ -71,8 +71,6 @@ class OfferServiceTest {
     private EmployeeService employeeService;
     @Mock
     private EmployeeCompensationRepository employeeCompensationRepository;
-    @Mock
-    private CompensationService compensationService;
 
     private OfferService offerService;
 
@@ -90,8 +88,7 @@ class OfferServiceTest {
                 salaryComponentRepository,
                 offerEmailService,
                 employeeService,
-                employeeCompensationRepository,
-                compensationService
+                employeeCompensationRepository
         );
     }
 
@@ -469,7 +466,6 @@ class OfferServiceTest {
 
         JobOffer offer = createJobOffer(1L, "John Doe", OfferStatus.DRAFT);
         when(jobOfferRepository.findWithDepartmentAndDesignationById(1L)).thenReturn(Optional.of(offer));
-        when(jobOfferRepository.save(any())).thenReturn(offer);
         when(offerPdfService.generateOfferLetter(any())).thenReturn(new byte[]{1, 2, 3});
         when(offerCompensationRepository.findByOfferId(1L)).thenReturn(Optional.empty());
 
@@ -505,7 +501,6 @@ class OfferServiceTest {
         compensation.getOfferCompensationLine().add(line);
 
         when(jobOfferRepository.findWithDepartmentAndDesignationById(1L)).thenReturn(Optional.of(offer));
-        when(jobOfferRepository.save(any())).thenReturn(offer);
         when(offerCompensationRepository.findByOfferId(1L)).thenReturn(Optional.of(compensation));
         when(offerPdfService.generateOfferLetter(any())).thenReturn(new byte[]{1, 2, 3});
 
@@ -626,7 +621,6 @@ class OfferServiceTest {
         assertEquals(OfferStatus.JOINED, offer.getStatus());
         verify(jobOfferEventRepository, times(1)).save(any(JobOfferEvent.class));
         verify(employeeService, times(1)).create(any(EmployeeRequest.class));
-        verify(compensationService, times(1)).syncToSalaryStructure(any());
 
         // Verify annualCtc calculation
         EmployeeCompensation savedCompensation = captor.getValue();
