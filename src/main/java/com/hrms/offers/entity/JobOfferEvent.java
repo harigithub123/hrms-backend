@@ -1,6 +1,6 @@
 package com.hrms.offers.entity;
 
-import com.hrms.offers.OfferEventAction;
+import com.hrms.offers.dto.OfferEventAction;
 import jakarta.persistence.*;
 
 import java.time.Instant;

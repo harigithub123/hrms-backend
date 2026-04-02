@@ -1,7 +1,5 @@
 package com.hrms.offers.dto;
 
-import com.hrms.offers.EmployeeType;
-import com.hrms.offers.OfferStatus;
 import com.hrms.offers.entity.JobOffer;
 
 import java.time.LocalDate;

@@ -1,7 +1,7 @@
 package com.hrms.offers.entity;
 
-import com.hrms.offers.EmployeeType;
-import com.hrms.offers.OfferStatus;
+import com.hrms.offers.dto.EmployeeType;
+import com.hrms.offers.dto.OfferStatus;
 import com.hrms.org.entity.Department;
 import com.hrms.org.entity.Designation;
 import com.hrms.org.entity.Employee;

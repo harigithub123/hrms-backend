@@ -1,6 +1,5 @@
 package com.hrms.offers.dto;
 
-import com.hrms.offers.EmployeeType;
 import com.hrms.offers.OfferPdfService;
 import com.hrms.offers.entity.JobOffer;
 

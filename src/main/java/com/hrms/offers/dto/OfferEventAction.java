@@ -1,4 +1,4 @@
-package com.hrms.offers;
+package com.hrms.offers.dto;
 
 public enum OfferEventAction {
     RELEASED,

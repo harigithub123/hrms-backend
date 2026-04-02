@@ -1,4 +1,4 @@
-package com.hrms.offers;
+package com.hrms.offers.dto;
 import java.util.Arrays;
 import java.util.Optional;
 

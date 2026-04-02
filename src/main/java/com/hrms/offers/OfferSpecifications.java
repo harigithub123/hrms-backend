@@ -1,5 +1,6 @@
 package com.hrms.offers;
 
+import com.hrms.offers.dto.OfferStatus;
 import com.hrms.offers.entity.JobOffer;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
@@ -22,7 +23,7 @@ public final class OfferSpecifications {
             List<Predicate> preds = new ArrayList<>();
 
             if (status != null && !status.isBlank()) {
-                preds.add(cb.equal(root.get("status"), com.hrms.offers.OfferStatus.valueOf(status.trim())));
+                preds.add(cb.equal(root.get("status"), OfferStatus.valueOf(status.trim())));
             }
             if (employeeType != null && !employeeType.isBlank()) {
                 preds.add(cb.equal(root.get("employeeType"), employeeType.trim()));
