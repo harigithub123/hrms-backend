@@ -235,12 +235,39 @@ public class OnboardingService {
         return toDto(caseRepository.findById(caseId).orElseThrow());
     }
 
+    @Transactional(readOnly = true)
+    public EmployeePayrollBankContextDto getPayrollBankContextByEmployeeId(Long employeeId) {
+        requireHrAdmin();
+        if (!employeeRepository.existsById(employeeId)) {
+            throw new IllegalArgumentException("Employee not found: " + employeeId);
+        }
+        Optional<OnboardingCase> oc = caseRepository.findFirstByEmployee_IdOrderByIdDesc(employeeId);
+        if (oc.isEmpty()) {
+            return new EmployeePayrollBankContextDto(false, null, null);
+        }
+        OnboardingCase c = oc.get();
+        OnboardingBankDetailsDto bank = bankDetailsRepository.findByOnboardingCase_Id(c.getId())
+                .map(OnboardingBankDetailsDto::from)
+                .orElse(null);
+        return new EmployeePayrollBankContextDto(true, c.getId(), bank);
+    }
+
+    @Transactional
+    public OnboardingCaseDto saveBankDetailsByEmployeeId(Long employeeId, OnboardingBankDetailsUpsertRequest req) {
+        requireHrAdmin();
+        OnboardingCase c = caseRepository.findFirstByEmployee_IdOrderByIdDesc(employeeId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "No onboarding record is linked to this employee. "
+                                + "Payroll bank details apply to employees hired through onboarding."));
+        return saveBankDetails(c.getId(), req);
+    }
+
     @Transactional
     public OnboardingCaseDto saveBankDetails(Long caseId, OnboardingBankDetailsUpsertRequest req) {
         requireHrAdmin();
         OnboardingCase c = caseRepository.findById(caseId)
                 .orElseThrow(() -> new IllegalArgumentException("Onboarding case not found: " + caseId));
-        ensureCaseEditable(c);
+        ensureBankDetailsEditable(c);
         OnboardingBankAccountType accountType;
         try {
             accountType = OnboardingBankAccountType.valueOf(req.accountType().trim().toUpperCase());
@@ -451,6 +478,13 @@ public class OnboardingService {
     private void ensureCaseEditable(OnboardingCase c) {
         if (c.getStatus() == OnboardingStatus.COMPLETED) {
             throw new IllegalArgumentException("Cannot modify a completed onboarding case");
+        }
+    }
+
+    /** Bank details may be updated after hire (e.g. employee bank change requests). */
+    private void ensureBankDetailsEditable(OnboardingCase c) {
+        if (c.getStatus() == OnboardingStatus.CANCELLED) {
+            throw new IllegalArgumentException("Cannot modify bank details for a cancelled onboarding case");
         }
     }
 

@@ -10,4 +10,6 @@ public interface OnboardingCaseRepository extends JpaRepository<OnboardingCase, 
     List<OnboardingCase> findAllByOrderByIdDesc();
 
     Optional<OnboardingCase> findFirstByOffer_IdOrderByIdDesc(Long offerId);
+
+    Optional<OnboardingCase> findFirstByEmployee_IdOrderByIdDesc(Long employeeId);
 }
