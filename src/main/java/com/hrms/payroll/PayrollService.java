@@ -23,7 +23,6 @@ import org.springframework.web.server.ResponseStatusException;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -248,7 +247,7 @@ public class PayrollService {
 
         return switch (freq) {
             case MONTHLY -> amount;
-            case YEARLY -> amount.divide(BigDecimal.valueOf(12), 2, java.math.RoundingMode.HALF_UP);
+            case YEARLY -> amount.divide(BigDecimal.valueOf(12), 2, java.math.RoundingMode.HALF_UP); //TODO::add in particular month salary.
             case ONE_TIME -> BigDecimal.ZERO; // One-time payments not included in regular payroll
         };
     }
