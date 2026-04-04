@@ -307,6 +307,8 @@ public class PayrollService {
             return bytes;
         } catch (IOException e) {
             throw new IllegalStateException("Failed to generate PDF: " + e.getMessage());
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
