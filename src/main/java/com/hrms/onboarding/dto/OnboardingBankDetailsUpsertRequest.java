@@ -3,6 +3,8 @@ package com.hrms.onboarding.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+import java.time.LocalDate;
+
 public record OnboardingBankDetailsUpsertRequest(
         @NotBlank @Size(max = 200) String accountHolderName,
         @NotBlank @Size(max = 200) String bankName,
@@ -10,5 +12,7 @@ public record OnboardingBankDetailsUpsertRequest(
         @NotBlank @Size(max = 80) String accountNumber,
         @NotBlank @Size(max = 20) String ifscCode,
         @NotBlank @Size(max = 20) String accountType,
-        @Size(max = 500) String notes
+        @Size(max = 500) String notes,
+        /** When omitted, defaults to today on the server. */
+        LocalDate effectiveFrom
 ) {}

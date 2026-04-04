@@ -63,19 +63,6 @@ public class OnboardingController {
         return onboardingService.saveBankDetails(caseId, req);
     }
 
-    @GetMapping("/employee/{employeeId}/payroll-bank")
-    public EmployeePayrollBankContextDto getPayrollBankByEmployee(@PathVariable Long employeeId) {
-        return onboardingService.getPayrollBankContextByEmployeeId(employeeId);
-    }
-
-    @PutMapping("/employee/{employeeId}/payroll-bank")
-    public OnboardingCaseDto savePayrollBankByEmployee(
-            @PathVariable Long employeeId,
-            @Valid @RequestBody OnboardingBankDetailsUpsertRequest req
-    ) {
-        return onboardingService.saveBankDetailsByEmployeeId(employeeId, req);
-    }
-
     @PostMapping("/{id}/complete")
     public OnboardingCaseDto complete(@PathVariable Long id) {
         return onboardingService.complete(id);

@@ -3,9 +3,11 @@ package com.hrms.payroll;
 import com.hrms.org.entity.Department;
 import com.hrms.org.entity.Designation;
 import com.hrms.org.entity.Employee;
+import com.hrms.payroll.entity.EmployeePayrollBank;
 import com.hrms.payroll.entity.PayRun;
 import com.hrms.payroll.entity.Payslip;
 import com.hrms.payroll.entity.PayslipLine;
+import com.hrms.payroll.repository.EmployeePayrollBankRepository;
 import com.itextpdf.text.BaseColor;
 import com.itextpdf.text.Document;
 import com.itextpdf.text.DocumentException;
@@ -28,9 +30,16 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 @Service
 public class PayslipPdfService {
+
+    private final EmployeePayrollBankRepository employeePayrollBankRepository;
+
+    public PayslipPdfService(EmployeePayrollBankRepository employeePayrollBankRepository) {
+        this.employeePayrollBankRepository = employeePayrollBankRepository;
+    }
 
     private static final Font TITLE = new Font(Font.FontFamily.HELVETICA, 14, Font.BOLD);
 
@@ -99,10 +108,10 @@ public class PayslipPdfService {
             addEmployeeDetailCell(empTable, "Days Worked", normalFont);
             addEmployeeDetailCell(empTable, PLACEHOLDER, normalFont);
             addEmployeeDetailCell(empTable, "Bank Name, Branch", normalFont);
-            addEmployeeDetailCell(empTable, PLACEHOLDER, normalFont);
+            addEmployeeDetailCell(empTable, sanitize(textOrPlaceholder(resolveBankBranchDisplay(emp, run))), normalFont);
 
             addEmployeeDetailCell(empTable, "Bank Acct", normalFont);
-            addEmployeeDetailCell(empTable, PLACEHOLDER, normalFont);
+            addEmployeeDetailCell(empTable, sanitize(resolveBankAccountDisplay(emp, run)), normalFont);
             addEmployeeDetailCell(empTable, "Overtime Hours", normalFont);
             addEmployeeDetailCell(empTable, PLACEHOLDER, normalFont);
 
@@ -202,6 +211,45 @@ public class PayslipPdfService {
         } catch (DocumentException e) {
             throw new IOException("Failed to build payslip PDF: " + e.getMessage(), e);
         }
+    }
+
+    private String resolveBankBranchDisplay(Employee emp, PayRun run) {
+        Optional<EmployeePayrollBank> opt = employeePayrollBankRepository.findByEmployee_Id(emp.getId());
+        if (opt.isEmpty()) {
+            return null;
+        }
+        EmployeePayrollBank b = opt.get();
+        if (b.getEffectiveFrom() != null && run.getPeriodEnd().isBefore(b.getEffectiveFrom())) {
+            return null;
+        }
+        String bn = b.getBankName();
+        if (b.getBranch() != null && !b.getBranch().isBlank()) {
+            return bn + ", " + b.getBranch();
+        }
+        return bn;
+    }
+
+    private String resolveBankAccountDisplay(Employee emp, PayRun run) {
+        Optional<EmployeePayrollBank> opt = employeePayrollBankRepository.findByEmployee_Id(emp.getId());
+        if (opt.isEmpty()) {
+            return PLACEHOLDER;
+        }
+        EmployeePayrollBank b = opt.get();
+        if (b.getEffectiveFrom() != null && run.getPeriodEnd().isBefore(b.getEffectiveFrom())) {
+            return PLACEHOLDER;
+        }
+        return maskAccountLast4(b.getAccountNumber());
+    }
+
+    private static String maskAccountLast4(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return PLACEHOLDER;
+        }
+        String d = raw.replaceAll("\\s", "");
+        if (d.length() <= 4) {
+            return "****";
+        }
+        return "****" + d.substring(d.length() - 4);
     }
 
     private static String resolveEmployeeIdDisplay(Employee emp) {

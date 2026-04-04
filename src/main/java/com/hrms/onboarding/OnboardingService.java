@@ -25,6 +25,7 @@ import com.hrms.onboarding.repository.OnboardingBankDetailsRepository;
 import com.hrms.onboarding.repository.OnboardingCaseRepository;
 import com.hrms.onboarding.repository.OnboardingTaskAuditRepository;
 import com.hrms.onboarding.repository.OnboardingTaskRepository;
+import com.hrms.payroll.EmployeePayrollBankService;
 import com.hrms.org.entity.Employee;
 import com.hrms.org.repository.DepartmentRepository;
 import com.hrms.org.repository.DesignationRepository;
@@ -72,6 +73,7 @@ public class OnboardingService {
     private final EmployeeCompensationRepository employeeCompensationRepository;
     private final OnboardingTaskAuditRepository taskAuditRepository;
     private final OnboardingBankDetailsRepository bankDetailsRepository;
+    private final EmployeePayrollBankService employeePayrollBankService;
 
     public OnboardingService(
             OnboardingCaseRepository caseRepository,
@@ -88,7 +90,8 @@ public class OnboardingService {
             OfferCompensationRepository offerCompensationRepository,
             EmployeeCompensationRepository employeeCompensationRepository,
             OnboardingTaskAuditRepository taskAuditRepository,
-            OnboardingBankDetailsRepository bankDetailsRepository
+            OnboardingBankDetailsRepository bankDetailsRepository,
+            EmployeePayrollBankService employeePayrollBankService
     ) {
         this.caseRepository = caseRepository;
         this.taskRepository = taskRepository;
@@ -105,6 +108,7 @@ public class OnboardingService {
         this.employeeCompensationRepository = employeeCompensationRepository;
         this.taskAuditRepository = taskAuditRepository;
         this.bankDetailsRepository = bankDetailsRepository;
+        this.employeePayrollBankService = employeePayrollBankService;
     }
 
     @Transactional(readOnly = true)
@@ -235,33 +239,6 @@ public class OnboardingService {
         return toDto(caseRepository.findById(caseId).orElseThrow());
     }
 
-    @Transactional(readOnly = true)
-    public EmployeePayrollBankContextDto getPayrollBankContextByEmployeeId(Long employeeId) {
-        requireHrAdmin();
-        if (!employeeRepository.existsById(employeeId)) {
-            throw new IllegalArgumentException("Employee not found: " + employeeId);
-        }
-        Optional<OnboardingCase> oc = caseRepository.findFirstByEmployee_IdOrderByIdDesc(employeeId);
-        if (oc.isEmpty()) {
-            return new EmployeePayrollBankContextDto(false, null, null);
-        }
-        OnboardingCase c = oc.get();
-        OnboardingBankDetailsDto bank = bankDetailsRepository.findByOnboardingCase_Id(c.getId())
-                .map(OnboardingBankDetailsDto::from)
-                .orElse(null);
-        return new EmployeePayrollBankContextDto(true, c.getId(), bank);
-    }
-
-    @Transactional
-    public OnboardingCaseDto saveBankDetailsByEmployeeId(Long employeeId, OnboardingBankDetailsUpsertRequest req) {
-        requireHrAdmin();
-        OnboardingCase c = caseRepository.findFirstByEmployee_IdOrderByIdDesc(employeeId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "No onboarding record is linked to this employee. "
-                                + "Payroll bank details apply to employees hired through onboarding."));
-        return saveBankDetails(c.getId(), req);
-    }
-
     @Transactional
     public OnboardingCaseDto saveBankDetails(Long caseId, OnboardingBankDetailsUpsertRequest req) {
         requireHrAdmin();
@@ -287,6 +264,11 @@ public class OnboardingService {
         b.setAccountType(accountType);
         b.setNotes(req.notes() != null && !req.notes().isBlank() ? req.notes().trim() : null);
         bankDetailsRepository.save(b);
+        User u = currentUserService.requireCurrentUser();
+        LocalDate eff = req.effectiveFrom() != null ? req.effectiveFrom() : LocalDate.now();
+        if (c.getEmployee() != null) {
+            employeePayrollBankService.syncFromOnboardingCaseBank(c, b, eff, u);
+        }
         return toDto(caseRepository.findById(caseId).orElseThrow());
     }
 
@@ -402,6 +384,9 @@ public class OnboardingService {
         c.setEmployee(saved);
         c.setStatus(OnboardingStatus.COMPLETED);
         caseRepository.save(c);
+
+        employeePayrollBankService.ensureFromOnboardingAfterHire(c.getId(), saved.getId(),
+                currentUserService.requireCurrentUser());
 
         if (linkedOffer != null) {
             linkedOffer.setEmployee(saved);

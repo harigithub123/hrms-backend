@@ -1,8 +1,9 @@
 package com.hrms.onboarding.dto;
 
 /**
- * Payroll bank details are stored on the onboarding case linked to an employee (after hire).
- * Employees created only via the directory may have no linked case ({@code linked} false).
+ * {@code linked} is true when an onboarding case exists for this employee (informational).
+ * Authoritative payroll bank is {@link com.hrms.payroll.entity.EmployeePayrollBank} when present;
+ * otherwise bank details may still appear from the onboarding case record.
  */
 public record EmployeePayrollBankContextDto(
         boolean linked,
