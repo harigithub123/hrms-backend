@@ -1,9 +1,6 @@
 package com.hrms.offers;
 
 import com.hrms.auth.entity.User;
-import com.hrms.compensation.entity.EmployeeCompensation;
-import com.hrms.compensation.entity.EmployeeCompensationLine;
-import com.hrms.compensation.repository.EmployeeCompensationRepository;
 import com.hrms.offers.dto.*;
 import com.hrms.offers.entity.JobOffer;
 import com.hrms.offers.entity.JobOfferEvent;
@@ -12,11 +9,9 @@ import com.hrms.offers.entity.OfferCompensationLine;
 import com.hrms.offers.repository.JobOfferEventRepository;
 import com.hrms.offers.repository.OfferCompensationRepository;
 import com.hrms.offers.repository.JobOfferRepository;
-import com.hrms.org.EmployeeRequest;
-import com.hrms.org.EmployeeService;
+import com.hrms.onboarding.OnboardingService;
 import com.hrms.org.repository.DepartmentRepository;
 import com.hrms.org.repository.DesignationRepository;
-import com.hrms.org.repository.EmployeeRepository;
 import com.hrms.payroll.entity.SalaryComponent;
 import com.hrms.payroll.repository.SalaryComponentRepository;
 import com.hrms.security.CurrentUserService;
@@ -45,14 +40,12 @@ public class OfferService {
     private final JobOfferEventRepository jobOfferEventRepository;
     private final DepartmentRepository departmentRepository;
     private final DesignationRepository designationRepository;
-    private final EmployeeRepository employeeRepository;
     private final CurrentUserService currentUserService;
     private final OfferPdfService offerPdfService;
     private final OfferCompensationRepository offerCompensationRepository;
     private final SalaryComponentRepository salaryComponentRepository;
     private final OfferEmailService offerEmailService;
-    private final EmployeeService employeeService;
-    private final EmployeeCompensationRepository employeeCompensationRepository;
+    private final OnboardingService onboardingService;
 
     public OfferService(
             OfferCompensationRepository offerCompensationRepository,
@@ -60,26 +53,22 @@ public class OfferService {
             JobOfferEventRepository jobOfferEventRepository,
             DepartmentRepository departmentRepository,
             DesignationRepository designationRepository,
-            EmployeeRepository employeeRepository,
             CurrentUserService currentUserService,
             OfferPdfService offerPdfService,
             SalaryComponentRepository salaryComponentRepository,
             OfferEmailService offerEmailService,
-            EmployeeService employeeService,
-            EmployeeCompensationRepository employeeCompensationRepository
+            OnboardingService onboardingService
     ) {
         this.jobOfferRepository = jobOfferRepository;
         this.jobOfferEventRepository = jobOfferEventRepository;
         this.departmentRepository = departmentRepository;
         this.designationRepository = designationRepository;
-        this.employeeRepository = employeeRepository;
         this.currentUserService = currentUserService;
         this.offerPdfService = offerPdfService;
         this.offerCompensationRepository = offerCompensationRepository;
         this.salaryComponentRepository = salaryComponentRepository;
         this.offerEmailService = offerEmailService;
-        this.employeeService = employeeService;
-        this.employeeCompensationRepository = employeeCompensationRepository;
+        this.onboardingService = onboardingService;
     }
 
     @Transactional(readOnly = true)
@@ -314,59 +303,23 @@ public class OfferService {
             throw new IllegalArgumentException("Only accepted offers can be marked joined");
         }
         if (offer.getEmployee() != null) {
-            throw new IllegalArgumentException("Employee already created for this offer");
+            throw new IllegalArgumentException("Employee already linked to this offer");
         }
         if (offer.getCandidateEmail() == null || offer.getCandidateEmail().isBlank()) {
-            throw new IllegalArgumentException("Candidate email is required to create employee");
-        }
-        if (offer.getCandidateMobile() == null || offer.getCandidateMobile().isBlank()) {
-            throw new IllegalArgumentException("Candidate mobile number is required to create employee");
+            throw new IllegalArgumentException("Candidate email is required for onboarding");
         }
 
-        NameParts np = splitName(offer.getCandidateName());
-        EmployeeRequest empReq = new EmployeeRequest(
-                null,
-                np.firstName(),
-                np.lastName(),
-                offer.getCandidateEmail(),
-                offer.getCandidateMobile(),
-                offer.getDepartment() != null ? offer.getDepartment().getId() : null,
-                offer.getDesignation() != null ? offer.getDesignation().getId() : null,
-                body.actualJoiningDate()
-        );
-        var createdEmployee = employeeService.create(empReq);
-
-        offer.setEmployee(employeeRepository.getReferenceById(createdEmployee.id()));
         offer.setStatus(OfferStatus.JOINED);
         offer.setActualJoiningDate(body.actualJoiningDate());
         recordEvent(offer, OfferEventAction.JOINED, u.getId(), null);
 
-        OfferCompensation offerComp = offerCompensationRepository.findByOfferId(offer.getId())
-                .orElseThrow(() -> new IllegalArgumentException("Offer compensation is required to create employee compensation"));
-        if (offerComp.getOfferCompensationLine() == null || offerComp.getOfferCompensationLine().isEmpty()) {
-            throw new IllegalArgumentException("Offer compensation lines are required");
-        }
+        JobOffer savedOffer = jobOfferRepository.save(offer);
+        onboardingService.ensureOnboardingForJoinedOffer(
+                savedOffer.getId(),
+                body.actualJoiningDate(),
+                u.getId());
 
-        EmployeeCompensation c = new EmployeeCompensation();
-        c.setEmployee(employeeRepository.getReferenceById(createdEmployee.id()));
-        LocalDate effectiveDate = body.compensationEffectiveFrom() != null ? body.compensationEffectiveFrom() : body.actualJoiningDate();
-        c.setEffectiveFrom(effectiveDate);
-        c.setCurrency(offerComp.getCurrency() != null ? offerComp.getCurrency() : (offer.getCurrency() != null ? offer.getCurrency() : "INR"));
-        c.setNotes("Created from offer #" + offer.getId());
-
-        for (OfferCompensationLine ol : offerComp.getOfferCompensationLine()) {
-            EmployeeCompensationLine nl = new EmployeeCompensationLine();
-            nl.setCompensation(c);
-            nl.setComponent(ol.getComponent());
-            nl.setAmount(ol.getAmount() != null ? ol.getAmount() : BigDecimal.ZERO);
-            nl.setFrequency(ol.getFrequency() != null ? ol.getFrequency() : com.hrms.compensation.CompensationFrequency.MONTHLY);
-            c.getLines().add(nl);
-        }
-
-        c.setAnnualCtc(c.calculateAnnualCtc());
-        employeeCompensationRepository.save(c);
-
-        return OfferDto.from(jobOfferRepository.save(offer));
+        return OfferDto.from(savedOffer);
     }
 
     private void recordEvent(JobOffer offer, OfferEventAction action, Long byUserId, String remark) {
@@ -414,15 +367,4 @@ public class OfferService {
         return (cur.isBlank() ? "" : cur + " ") + amt.toPlainString();
     }
 
-    private record NameParts(String firstName, String lastName) {}
-
-    private static NameParts splitName(String full) {
-        String s = full != null ? full.trim().replaceAll("\\s+", " ") : "";
-        if (s.isBlank()) return new NameParts("Employee", "—");
-        String[] parts = s.split(" ");
-        if (parts.length == 1) return new NameParts(parts[0], "—");
-        String first = parts[0];
-        String last = String.join(" ", java.util.Arrays.copyOfRange(parts, 1, parts.length));
-        return new NameParts(first, last);
-    }
 }

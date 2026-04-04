@@ -38,6 +38,14 @@ public class OnboardingController {
         return onboardingService.updateStatus(id, OnboardingStatus.valueOf(status));
     }
 
+    @PostMapping("/{caseId}/tasks")
+    public OnboardingCaseDto addTask(
+            @PathVariable Long caseId,
+            @Valid @RequestBody OnboardingTaskCreateRequest req
+    ) {
+        return onboardingService.addTask(caseId, req);
+    }
+
     @PatchMapping("/{caseId}/tasks/{taskId}")
     public OnboardingTaskDto updateTask(
             @PathVariable Long caseId,
@@ -45,6 +53,14 @@ public class OnboardingController {
             @Valid @RequestBody OnboardingTaskUpdateRequest req
     ) {
         return onboardingService.updateTask(caseId, taskId, req);
+    }
+
+    @PutMapping("/{caseId}/bank-details")
+    public OnboardingCaseDto saveBankDetails(
+            @PathVariable Long caseId,
+            @Valid @RequestBody OnboardingBankDetailsUpsertRequest req
+    ) {
+        return onboardingService.saveBankDetails(caseId, req);
     }
 
     @PostMapping("/{id}/complete")

@@ -2,9 +2,6 @@ package com.hrms.offers;
 
 import com.hrms.auth.entity.User;
 import com.hrms.compensation.CompensationFrequency;
-import com.hrms.compensation.CompensationService;
-import com.hrms.compensation.entity.EmployeeCompensation;
-import com.hrms.compensation.repository.EmployeeCompensationRepository;
 import com.hrms.offers.dto.*;
 import com.hrms.offers.entity.JobOffer;
 import com.hrms.offers.entity.JobOfferEvent;
@@ -13,20 +10,16 @@ import com.hrms.offers.entity.OfferCompensationLine;
 import com.hrms.offers.repository.JobOfferEventRepository;
 import com.hrms.offers.repository.OfferCompensationRepository;
 import com.hrms.offers.repository.JobOfferRepository;
-import com.hrms.org.EmployeeRequest;
-import com.hrms.org.EmployeeService;
-import com.hrms.org.EmployeeDto;
+import com.hrms.onboarding.OnboardingService;
 import com.hrms.org.entity.Employee;
 import com.hrms.org.repository.DepartmentRepository;
 import com.hrms.org.repository.DesignationRepository;
-import com.hrms.org.repository.EmployeeRepository;
 import com.hrms.payroll.entity.SalaryComponent;
 import com.hrms.payroll.repository.SalaryComponentRepository;
 import com.hrms.security.CurrentUserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -56,8 +49,6 @@ class OfferServiceTest {
     @Mock
     private DesignationRepository designationRepository;
     @Mock
-    private EmployeeRepository employeeRepository;
-    @Mock
     private CurrentUserService currentUserService;
     @Mock
     private OfferPdfService offerPdfService;
@@ -68,9 +59,7 @@ class OfferServiceTest {
     @Mock
     private OfferEmailService offerEmailService;
     @Mock
-    private EmployeeService employeeService;
-    @Mock
-    private EmployeeCompensationRepository employeeCompensationRepository;
+    private OnboardingService onboardingService;
 
     private OfferService offerService;
 
@@ -82,13 +71,11 @@ class OfferServiceTest {
                 jobOfferEventRepository,
                 departmentRepository,
                 designationRepository,
-                employeeRepository,
                 currentUserService,
                 offerPdfService,
                 salaryComponentRepository,
                 offerEmailService,
-                employeeService,
-                employeeCompensationRepository
+                onboardingService
         );
     }
 
@@ -588,29 +575,7 @@ class OfferServiceTest {
         offer.setCandidateEmail("john@example.com");
         offer.setCandidateMobile("9999999999");
 
-        Employee mockEmployee = new Employee();
-        mockEmployee.setId(1L);
-
         when(jobOfferRepository.findById(1L)).thenReturn(Optional.of(offer));
-        when(employeeRepository.getReferenceById(any())).thenReturn(mockEmployee);
-        EmployeeDto empDto = new EmployeeDto(1L, "EMP001", "John", "Doe", "john@example.com", "9999999999", 1L, "IT", 1L, "Developer", null, null, LocalDate.now());
-        when(employeeService.create(any(EmployeeRequest.class))).thenReturn(empDto);
-
-        OfferCompensation compensation = new OfferCompensation();
-        compensation.setCurrency("INR");
-        SalaryComponent component = new SalaryComponent();
-        component.setId(1L);
-        component.setName("Basic Salary");
-        OfferCompensationLine line = new OfferCompensationLine();
-        line.setComponent(component);
-        line.setAmount(new BigDecimal("50000"));
-        line.setFrequency(CompensationFrequency.MONTHLY);
-        compensation.getOfferCompensationLine().add(line);
-
-        when(offerCompensationRepository.findByOfferId(1L)).thenReturn(Optional.of(compensation));
-
-        ArgumentCaptor<EmployeeCompensation> captor = ArgumentCaptor.forClass(EmployeeCompensation.class);
-        when(employeeCompensationRepository.save(captor.capture())).thenAnswer(i -> i.getArgument(0));
         when(jobOfferRepository.save(any())).thenReturn(offer);
 
         MarkJoinedRequest request = new MarkJoinedRequest(null, LocalDate.now(), true);
@@ -620,12 +585,9 @@ class OfferServiceTest {
         assertNotNull(result);
         assertEquals(OfferStatus.JOINED, offer.getStatus());
         verify(jobOfferEventRepository, times(1)).save(any(JobOfferEvent.class));
-        verify(employeeService, times(1)).create(any(EmployeeRequest.class));
-
-        // Verify annualCtc calculation
-        EmployeeCompensation savedCompensation = captor.getValue();
-        assertNotNull(savedCompensation.getAnnualCtc());
-        assertEquals(new BigDecimal("600000.00"), savedCompensation.getAnnualCtc()); // 50000 * 12 months
+        verify(onboardingService, times(1)).ensureOnboardingForJoinedOffer(
+                eq(1L), eq(request.actualJoiningDate()), eq(1L));
+        verifyNoInteractions(offerCompensationRepository);
     }
 
     @Test
@@ -685,112 +647,22 @@ class OfferServiceTest {
     }
 
     @Test
-    void should_throwException_whenMarkJoinedWithoutCandidateMobile() {
+    void should_markJoined_useActualJoiningDateForOnboarding_whenCompensationEffectiveFromProvided() {
         User hrUser = createHrAdminUser();
         when(currentUserService.requireCurrentUser()).thenReturn(hrUser);
 
         JobOffer offer = createJobOffer(1L, "John Doe", OfferStatus.ACCEPTED);
         offer.setCandidateEmail("john@example.com");
-        offer.setCandidateMobile(null);
         when(jobOfferRepository.findById(1L)).thenReturn(Optional.of(offer));
-
-        MarkJoinedRequest request = new MarkJoinedRequest(null, LocalDate.now(), true);
-
-        assertThrows(IllegalArgumentException.class, () -> offerService.markJoined(1L, request));
-    }
-
-    @Test
-    void should_throwException_whenMarkJoinedWithoutOfferCompensation() {
-        User hrUser = createHrAdminUser();
-        when(currentUserService.requireCurrentUser()).thenReturn(hrUser);
-
-        JobOffer offer = createJobOffer(1L, "John Doe", OfferStatus.ACCEPTED);
-        offer.setCandidateEmail("john@example.com");
-        offer.setCandidateMobile("9999999999");
-
-        Employee mockEmployee = new Employee();
-        mockEmployee.setId(1L);
-
-        when(jobOfferRepository.findById(1L)).thenReturn(Optional.of(offer));
-        when(employeeRepository.getReferenceById(any())).thenReturn(mockEmployee);
-        EmployeeDto empDto2 = new EmployeeDto(1L, "EMP001", "John", "Doe", "john@example.com", "9999999999", 1L, "IT", 1L, "Developer", null, null, LocalDate.now());
-        when(employeeService.create(any(EmployeeRequest.class))).thenReturn(empDto2);
-        when(offerCompensationRepository.findByOfferId(1L)).thenReturn(Optional.empty());
-
-        MarkJoinedRequest request = new MarkJoinedRequest(null, LocalDate.now(), true);
-
-        assertThrows(IllegalArgumentException.class, () -> offerService.markJoined(1L, request));
-    }
-
-    @Test
-    void should_throwException_whenMarkJoinedWithoutCompensationLines() {
-        User hrUser = createHrAdminUser();
-        when(currentUserService.requireCurrentUser()).thenReturn(hrUser);
-
-        JobOffer offer = createJobOffer(1L, "John Doe", OfferStatus.ACCEPTED);
-        offer.setCandidateEmail("john@example.com");
-        offer.setCandidateMobile("9999999999");
-
-        Employee mockEmployee = new Employee();
-        mockEmployee.setId(1L);
-
-        when(jobOfferRepository.findById(1L)).thenReturn(Optional.of(offer));
-        when(employeeRepository.getReferenceById(any())).thenReturn(mockEmployee);
-        EmployeeDto empDto3 = new EmployeeDto(1L, "EMP001", "John", "Doe", "john@example.com", "9999999999", 1L, "IT", 1L, "Developer", null, null, LocalDate.now());
-        when(employeeService.create(any(EmployeeRequest.class))).thenReturn(empDto3);
-
-        OfferCompensation compensation = new OfferCompensation();
-        compensation.setCurrency("INR");
-
-        when(offerCompensationRepository.findByOfferId(1L)).thenReturn(Optional.of(compensation));
-
-        MarkJoinedRequest request = new MarkJoinedRequest(null, LocalDate.now(), true);
-
-        assertThrows(IllegalArgumentException.class, () -> offerService.markJoined(1L, request));
-    }
-
-    @Test
-    void should_setCompensationEffectiveFrom_whenProvidedInRequest() {
-        User hrUser = createHrAdminUser();
-        when(currentUserService.requireCurrentUser()).thenReturn(hrUser);
-
-        JobOffer offer = createJobOffer(1L, "John Doe", OfferStatus.ACCEPTED);
-        offer.setCandidateEmail("john@example.com");
-        offer.setCandidateMobile("9999999999");
-
-        Employee mockEmployee = new Employee();
-        mockEmployee.setId(1L);
-
-        when(jobOfferRepository.findById(1L)).thenReturn(Optional.of(offer));
-        when(employeeRepository.getReferenceById(any())).thenReturn(mockEmployee);
-        EmployeeDto empDto4 = new EmployeeDto(1L, "EMP001", "John", "Doe", "john@example.com", "9999999999", 1L, "IT", 1L, "Developer", null, null, LocalDate.now());
-        when(employeeService.create(any(EmployeeRequest.class))).thenReturn(empDto4);
-
-        OfferCompensation compensation = new OfferCompensation();
-        compensation.setCurrency("INR");
-        SalaryComponent component = new SalaryComponent();
-        component.setId(1L);
-        component.setName("Basic Salary");
-        OfferCompensationLine line = new OfferCompensationLine();
-        line.setComponent(component);
-        line.setAmount(new BigDecimal("50000"));
-        line.setFrequency(CompensationFrequency.MONTHLY);
-        compensation.getOfferCompensationLine().add(line);
-
-        when(offerCompensationRepository.findByOfferId(1L)).thenReturn(Optional.of(compensation));
-
-        ArgumentCaptor<EmployeeCompensation> captor = ArgumentCaptor.forClass(EmployeeCompensation.class);
-        when(employeeCompensationRepository.save(captor.capture())).thenAnswer(i -> i.getArgument(0));
         when(jobOfferRepository.save(any())).thenReturn(offer);
 
-        LocalDate effectiveFrom = LocalDate.now().plusDays(5);
-        MarkJoinedRequest request = new MarkJoinedRequest(effectiveFrom, LocalDate.now(), true);
+        LocalDate actualJoin = LocalDate.now();
+        MarkJoinedRequest request = new MarkJoinedRequest(actualJoin.plusDays(5), actualJoin, true);
 
-        OfferDto result = offerService.markJoined(1L, request);
+        offerService.markJoined(1L, request);
 
-        assertNotNull(result);
-        EmployeeCompensation savedCompensation = captor.getValue();
-        assertEquals(effectiveFrom, savedCompensation.getEffectiveFrom());
+        verify(onboardingService, times(1)).ensureOnboardingForJoinedOffer(
+                eq(1L), eq(actualJoin), eq(1L));
     }
 
     // ============ exportOffersCsv Tests ============

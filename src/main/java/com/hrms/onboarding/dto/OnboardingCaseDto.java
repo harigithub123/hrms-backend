@@ -25,9 +25,14 @@ public record OnboardingCaseDto(
         Long assignedHrUserId,
         String notes,
         Instant createdAt,
-        List<OnboardingTaskDto> tasks
+        List<OnboardingTaskDto> tasks,
+        OnboardingBankDetailsDto bankDetails
 ) {
-    public static OnboardingCaseDto from(OnboardingCase c, List<OnboardingTaskDto> tasks) {
+    public static OnboardingCaseDto from(
+            OnboardingCase c,
+            List<OnboardingTaskDto> tasks,
+            OnboardingBankDetailsDto bankDetails
+    ) {
         return new OnboardingCaseDto(
                 c.getId(),
                 c.getStatus(),
@@ -46,7 +51,8 @@ public record OnboardingCaseDto(
                 c.getAssignedHr() != null ? c.getAssignedHr().getId() : null,
                 c.getNotes(),
                 c.getCreatedAt(),
-                tasks
+                tasks,
+                bankDetails
         );
     }
 }
