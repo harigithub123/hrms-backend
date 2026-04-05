@@ -10,6 +10,7 @@ import com.hrms.compensation.CompensationFrequency;
 import com.hrms.compensation.entity.EmployeeCompensation;
 import com.hrms.compensation.entity.EmployeeCompensationLine;
 import com.hrms.compensation.repository.EmployeeCompensationRepository;
+import com.hrms.org.entity.Employee;
 import com.hrms.org.repository.EmployeeRepository;
 import com.hrms.payroll.dto.*;
 import com.hrms.payroll.entity.*;
@@ -23,14 +24,18 @@ import org.springframework.web.server.ResponseStatusException;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
 public class PayrollService {
+
+    private static final String ADVANCE_RECOVERY_COMPONENT_CODE = "ADVANCE_RECOVERY";
 
     private final SalaryComponentRepository salaryComponentRepository;
     private final EmployeeCompensationRepository compensationRepository;
@@ -109,136 +114,185 @@ public class PayrollService {
     @Transactional
     public PayRunDto createPayRun(PayRunCreateRequest req) {
         requireHrAdmin();
+        validatePayRunCreateRequest(req);
+        PayRun run = createDraftPayRun(req);
+        SalaryComponent advanceRecoveryComponent = findAdvanceRecoveryComponentOrNull();
+
+        int generated = 0;
+        for (Employee employee : employeeRepository.findAll()) {
+            if (tryCreatePayslipForEmployee(employee, run, req.periodEnd(), advanceRecoveryComponent)) {
+                generated++;
+            }
+        }
+
+        return finalizePayRunOrThrowIfNoPayslips(run, generated);
+    }
+
+    private void validatePayRunCreateRequest(PayRunCreateRequest req) {
         if (req.periodEnd().isBefore(req.periodStart())) {
             throw new IllegalArgumentException("periodEnd must be on or after periodStart");
         }
         if (payRunRepository.existsByPeriodStartAndPeriodEnd(req.periodStart(), req.periodEnd())) {
             throw new IllegalArgumentException("A pay run already exists for this period");
         }
+    }
+
+    private PayRun createDraftPayRun(PayRunCreateRequest req) {
         PayRun run = new PayRun();
         run.setPeriodStart(req.periodStart());
         run.setPeriodEnd(req.periodEnd());
         run.setStatus(PayRunStatus.DRAFT);
-        payRunRepository.save(run);
+        return payRunRepository.save(run);
+    }
 
-        int generated = 0;
-        for (var employee : employeeRepository.findAll()) {
-            List<EmployeeCompensation> candidates =
-                    compensationRepository.findActiveAsOf(employee.getId(), req.periodEnd());
-            if (candidates.isEmpty()) {
-                continue;
-            }
-            EmployeeCompensation compensation = candidates.get(0);
-            if (compensation.getLines().isEmpty()) {
-                continue;
-            }
+    private SalaryComponent findAdvanceRecoveryComponentOrNull() {
+        return salaryComponentRepository.findByCodeIgnoreCase(ADVANCE_RECOVERY_COMPONENT_CODE).orElse(null);
+    }
 
-            BigDecimal gross = BigDecimal.ZERO;
-            BigDecimal deductions = BigDecimal.ZERO;
-            List<PayslipLine> slipLines = new ArrayList<>();
-
-            for (EmployeeCompensationLine cl : compensation.getLines()) {
-                SalaryComponent comp = cl.getComponent();
-                if (!comp.isActive()) {
-                    continue;
-                }
-
-                // Convert to monthly amount for payslip
-                BigDecimal monthlyAmount = convertToMonthlyAmount(cl);
-                if (monthlyAmount.compareTo(BigDecimal.ZERO) <= 0) {
-                    continue;
-                }
-
-                PayslipLine pl = new PayslipLine();
-                pl.setComponent(comp);
-                pl.setComponentCode(comp.getCode());
-                pl.setComponentName(comp.getName());
-                pl.setKind(comp.getKind());
-                pl.setAmount(monthlyAmount);
-
-                if (comp.getKind() == SalaryComponentKind.EARNING) {
-                    gross = gross.add(monthlyAmount);
-                } else {
-                    deductions = deductions.add(monthlyAmount);
-                }
-                slipLines.add(pl);
-            }
-
-            if (slipLines.isEmpty()) {
-                continue;
-            }
-
-            SalaryComponent advanceComp = salaryComponentRepository.findByCodeIgnoreCase("ADVANCE_RECOVERY").orElse(null);
-            List<AdvanceRecovery> advanceRecoveries = new ArrayList<>();
-            if (advanceComp != null) {
-                List<SalaryAdvance> recoverable = salaryAdvanceRepository
-                        .findByEmployeeIdAndStatusAndOutstandingBalanceGreaterThan(
-                                employee.getId(), AdvanceStatus.PAID, BigDecimal.ZERO);
-                for (SalaryAdvance adv : recoverable) {
-                    if (adv.getOutstandingBalance() == null
-                            || adv.getOutstandingBalance().compareTo(BigDecimal.ZERO) <= 0) {
-                        continue;
-                    }
-                    BigDecimal per = adv.getRecoveryAmountPerMonth() != null
-                            ? adv.getRecoveryAmountPerMonth()
-                            : adv.getOutstandingBalance();
-                    BigDecimal take = per.min(adv.getOutstandingBalance());
-                    if (take.compareTo(BigDecimal.ZERO) <= 0) {
-                        continue;
-                    }
-                    PayslipLine pl = new PayslipLine();
-                    pl.setComponent(advanceComp);
-                    pl.setComponentCode(advanceComp.getCode());
-                    pl.setComponentName(advanceComp.getName() + " (#" + adv.getId() + ")");
-                    pl.setKind(SalaryComponentKind.DEDUCTION);
-                    pl.setAmount(take);
-                    slipLines.add(pl);
-                    deductions = deductions.add(take);
-                    advanceRecoveries.add(new AdvanceRecovery(adv.getId(), take));
-                }
-            }
-
-            BigDecimal net = gross.subtract(deductions);
-            Payslip payslip = new Payslip();
-            payslip.setPayRun(run);
-            payslip.setEmployee(employee);
-            payslip.setGrossAmount(gross);
-            payslip.setDeductionAmount(deductions);
-            payslip.setNetAmount(net);
-            for (PayslipLine pl : slipLines) {
-                pl.setPayslip(payslip);
-                payslip.getLines().add(pl);
-            }
-            payslipRepository.save(payslip);
-
-            for (AdvanceRecovery ar : advanceRecoveries) {
-                SalaryAdvance adv = salaryAdvanceRepository.findById(ar.advanceId())
-                        .orElseThrow(() -> new IllegalStateException("Advance missing: " + ar.advanceId()));
-                BigDecimal newBal = adv.getOutstandingBalance().subtract(ar.amount());
-                if (newBal.compareTo(BigDecimal.ZERO) < 0) {
-                    newBal = BigDecimal.ZERO;
-                }
-                adv.setOutstandingBalance(newBal);
-                if (newBal.compareTo(BigDecimal.ZERO) <= 0) {
-                    adv.setStatus(AdvanceStatus.RECOVERY_COMPLETE);
-                }
-                salaryAdvanceRepository.save(adv);
-                PayslipAdvanceDeduction pad = new PayslipAdvanceDeduction();
-                pad.setPayslip(payslip);
-                pad.setAdvance(adv);
-                pad.setAmount(ar.amount());
-                payslipAdvanceDeductionRepository.save(pad);
-            }
-            generated++;
-        }
-
-        if (generated == 0) {
+    private PayRunDto finalizePayRunOrThrowIfNoPayslips(PayRun run, int payslipCount) {
+        if (payslipCount == 0) {
             payRunRepository.delete(run);
             throw new IllegalArgumentException("No employees with compensation found for this period");
         }
         run.setStatus(PayRunStatus.FINALIZED);
         payRunRepository.save(run);
         return PayRunDto.from(run);
+    }
+
+    private boolean tryCreatePayslipForEmployee(
+            Employee employee,
+            PayRun run,
+            LocalDate periodEnd,
+            SalaryComponent advanceRecoveryComponent
+    ) {
+        Optional<EmployeeCompensation> compensation = findActiveCompensation(employee.getId(), periodEnd);
+        if (compensation.isEmpty() || compensation.get().getLines().isEmpty()) {
+            return false;
+        }
+
+        PayslipDraft draft = new PayslipDraft();
+        addCompensationLines(compensation.get(), draft);
+        if (draft.slipLines.isEmpty()) {
+            return false;
+        }
+
+        List<AdvanceRecovery> recoveries =
+                addAdvanceRecoveryLines(employee, advanceRecoveryComponent, draft);
+
+        Payslip payslip = persistPayslip(run, employee, draft);
+        applyAdvanceRecoveries(payslip, recoveries);
+        return true;
+    }
+
+    private Optional<EmployeeCompensation> findActiveCompensation(Long employeeId, LocalDate periodEnd) {
+        List<EmployeeCompensation> candidates = compensationRepository.findActiveAsOf(employeeId, periodEnd);
+        if (candidates.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(candidates.get(0));
+    }
+
+    private void addCompensationLines(EmployeeCompensation compensation, PayslipDraft draft) {
+        for (EmployeeCompensationLine cl : compensation.getLines()) {
+            SalaryComponent comp = cl.getComponent();
+            if (!comp.isActive()) {
+                continue;
+            }
+            BigDecimal monthlyAmount = convertToMonthlyAmount(cl);
+            if (monthlyAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            PayslipLine pl = new PayslipLine();
+            pl.setComponent(comp);
+            pl.setComponentCode(comp.getCode());
+            pl.setComponentName(comp.getName());
+            pl.setKind(comp.getKind());
+            pl.setAmount(monthlyAmount);
+            if (comp.getKind() == SalaryComponentKind.EARNING) {
+                draft.gross = draft.gross.add(monthlyAmount);
+            } else {
+                draft.deductions = draft.deductions.add(monthlyAmount);
+            }
+            draft.slipLines.add(pl);
+        }
+    }
+
+    private List<AdvanceRecovery> addAdvanceRecoveryLines(
+            Employee employee,
+            SalaryComponent advanceComp,
+            PayslipDraft draft
+    ) {
+        List<AdvanceRecovery> recoveries = new ArrayList<>();
+        if (advanceComp == null) {
+            return recoveries;
+        }
+        List<SalaryAdvance> recoverable = salaryAdvanceRepository
+                .findByEmployeeIdAndStatusAndOutstandingBalanceGreaterThan(
+                        employee.getId(), AdvanceStatus.PAID, BigDecimal.ZERO);
+        for (SalaryAdvance adv : recoverable) {
+            if (adv.getOutstandingBalance() == null
+                    || adv.getOutstandingBalance().compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            BigDecimal per = adv.getRecoveryAmountPerMonth() != null
+                    ? adv.getRecoveryAmountPerMonth()
+                    : adv.getOutstandingBalance();
+            BigDecimal take = per.min(adv.getOutstandingBalance());
+            if (take.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            PayslipLine pl = new PayslipLine();
+            pl.setComponent(advanceComp);
+            pl.setComponentCode(advanceComp.getCode());
+            pl.setComponentName(advanceComp.getName() + " (#" + adv.getId() + ")");
+            pl.setKind(SalaryComponentKind.DEDUCTION);
+            pl.setAmount(take);
+            draft.slipLines.add(pl);
+            draft.deductions = draft.deductions.add(take);
+            recoveries.add(new AdvanceRecovery(adv, take));
+        }
+        return recoveries;
+    }
+
+    private Payslip persistPayslip(PayRun run, Employee employee, PayslipDraft draft) {
+        BigDecimal net = draft.gross.subtract(draft.deductions);
+        Payslip payslip = new Payslip();
+        payslip.setPayRun(run);
+        payslip.setEmployee(employee);
+        payslip.setGrossAmount(draft.gross);
+        payslip.setDeductionAmount(draft.deductions);
+        payslip.setNetAmount(net);
+        for (PayslipLine pl : draft.slipLines) {
+            pl.setPayslip(payslip);
+            payslip.getLines().add(pl);
+        }
+        return payslipRepository.save(payslip);
+    }
+
+    private void applyAdvanceRecoveries(Payslip payslip, List<AdvanceRecovery> recoveries) {
+        for (AdvanceRecovery ar : recoveries) {
+            SalaryAdvance adv = ar.advance();
+            BigDecimal newBal = adv.getOutstandingBalance().subtract(ar.amount());
+            if (newBal.compareTo(BigDecimal.ZERO) < 0) {
+                newBal = BigDecimal.ZERO;
+            }
+            adv.setOutstandingBalance(newBal);
+            if (newBal.compareTo(BigDecimal.ZERO) <= 0) {
+                adv.setStatus(AdvanceStatus.RECOVERY_COMPLETE);
+            }
+            salaryAdvanceRepository.save(adv);
+            PayslipAdvanceDeduction pad = new PayslipAdvanceDeduction();
+            pad.setPayslip(payslip);
+            pad.setAdvance(adv);
+            pad.setAmount(ar.amount());
+            payslipAdvanceDeductionRepository.save(pad);
+        }
+    }
+
+    private static final class PayslipDraft {
+        BigDecimal gross = BigDecimal.ZERO;
+        BigDecimal deductions = BigDecimal.ZERO;
+        final List<PayslipLine> slipLines = new ArrayList<>();
     }
 
     private BigDecimal convertToMonthlyAmount(EmployeeCompensationLine line) {
@@ -350,5 +404,5 @@ public class PayrollService {
         c.setActive(req.active());
     }
 
-    private record AdvanceRecovery(Long advanceId, BigDecimal amount) {}
+    private record AdvanceRecovery(SalaryAdvance advance, BigDecimal amount) {}
 }
