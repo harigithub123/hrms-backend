@@ -10,6 +10,7 @@ import com.hrms.compensation.CompensationFrequency;
 import com.hrms.compensation.entity.EmployeeCompensation;
 import com.hrms.compensation.entity.EmployeeCompensationLine;
 import com.hrms.compensation.repository.EmployeeCompensationRepository;
+import com.hrms.config.PayrollStatutoryProperties;
 import com.hrms.org.entity.Employee;
 import com.hrms.org.repository.EmployeeRepository;
 import com.hrms.payroll.dto.*;
@@ -36,6 +37,8 @@ import java.util.stream.Collectors;
 public class PayrollService {
 
     private static final String ADVANCE_RECOVERY_COMPONENT_CODE = "ADVANCE_RECOVERY";
+    private static final String PF_COMPONENT_CODE = "PF";
+    private static final String PT_COMPONENT_CODE = "PT";
 
     private final SalaryComponentRepository salaryComponentRepository;
     private final EmployeeCompensationRepository compensationRepository;
@@ -46,6 +49,7 @@ public class PayrollService {
     private final PayslipPdfService payslipPdfService;
     private final SalaryAdvanceRepository salaryAdvanceRepository;
     private final PayslipAdvanceDeductionRepository payslipAdvanceDeductionRepository;
+    private final PayrollStatutoryProperties payrollStatutoryProperties;
 
     public PayrollService(
             SalaryComponentRepository salaryComponentRepository,
@@ -56,7 +60,8 @@ public class PayrollService {
             CurrentUserService currentUserService,
             PayslipPdfService payslipPdfService,
             SalaryAdvanceRepository salaryAdvanceRepository,
-            PayslipAdvanceDeductionRepository payslipAdvanceDeductionRepository
+            PayslipAdvanceDeductionRepository payslipAdvanceDeductionRepository,
+            PayrollStatutoryProperties payrollStatutoryProperties
     ) {
         this.salaryComponentRepository = salaryComponentRepository;
         this.compensationRepository = compensationRepository;
@@ -67,6 +72,7 @@ public class PayrollService {
         this.payslipPdfService = payslipPdfService;
         this.salaryAdvanceRepository = salaryAdvanceRepository;
         this.payslipAdvanceDeductionRepository = payslipAdvanceDeductionRepository;
+        this.payrollStatutoryProperties = payrollStatutoryProperties;
     }
 
     @Transactional(readOnly = true)
@@ -176,6 +182,8 @@ public class PayrollService {
             return false;
         }
 
+        addStatutoryDeductionLines(draft);
+
         List<AdvanceRecovery> recoveries =
                 addAdvanceRecoveryLines(employee, advanceRecoveryComponent, draft);
 
@@ -215,6 +223,44 @@ public class PayrollService {
             }
             draft.slipLines.add(pl);
         }
+    }
+
+    private void addStatutoryDeductionLines(PayslipDraft draft) {
+        addConfiguredDeductionIfAbsent(draft, PF_COMPONENT_CODE,
+                payrollStatutoryProperties.getProvidentFundMonthly());
+        addConfiguredDeductionIfAbsent(draft, PT_COMPONENT_CODE,
+                payrollStatutoryProperties.getProfessionalTaxMonthly());
+    }
+
+    private void addConfiguredDeductionIfAbsent(PayslipDraft draft, String componentCode, BigDecimal amount) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        if (draftHasComponentCode(draft, componentCode)) {
+            return;
+        }
+        salaryComponentRepository.findByCodeIgnoreCase(componentCode).ifPresent(comp -> {
+            if (!comp.isActive() || comp.getKind() != SalaryComponentKind.DEDUCTION) {
+                return;
+            }
+            PayslipLine pl = new PayslipLine();
+            pl.setComponent(comp);
+            pl.setComponentCode(comp.getCode());
+            pl.setComponentName(comp.getName());
+            pl.setKind(SalaryComponentKind.DEDUCTION);
+            pl.setAmount(amount);
+            draft.slipLines.add(pl);
+            draft.deductions = draft.deductions.add(amount);
+        });
+    }
+
+    private static boolean draftHasComponentCode(PayslipDraft draft, String code) {
+        for (PayslipLine pl : draft.slipLines) {
+            if (pl.getComponentCode() != null && pl.getComponentCode().equalsIgnoreCase(code)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private List<AdvanceRecovery> addAdvanceRecoveryLines(

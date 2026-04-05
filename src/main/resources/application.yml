@@ -65,6 +65,12 @@ hrms:
     from: ${HRMS_EMAIL_FROM:no-reply@example.com}
     reply-to: ${HRMS_EMAIL_REPLY_TO:}
     offer-subject: ${HRMS_OFFER_EMAIL_SUBJECT:Your Offer Letter}
+  # Fixed monthly statutory deductions on each payslip (after compensation lines).
+  # Skipped for a component if the employee's compensation already includes that code (PF / PT).
+  payroll:
+    statutory:
+      provident-fund-monthly: ${HRMS_PAYROLL_PF_MONTHLY:1800}
+      professional-tax-monthly: ${HRMS_PAYROLL_PT_MONTHLY:200}
 
 # JWT (use env JWT_SECRET in production; must be at least 256 bits for HS256)
 app:

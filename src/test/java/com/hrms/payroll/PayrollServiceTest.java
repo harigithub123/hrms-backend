@@ -10,6 +10,7 @@ import com.hrms.compensation.CompensationFrequency;
 import com.hrms.compensation.entity.EmployeeCompensation;
 import com.hrms.compensation.entity.EmployeeCompensationLine;
 import com.hrms.compensation.repository.EmployeeCompensationRepository;
+import com.hrms.config.PayrollStatutoryProperties;
 import com.hrms.org.entity.Employee;
 import com.hrms.org.repository.EmployeeRepository;
 import com.hrms.payroll.dto.PayRunCreateRequest;
@@ -66,10 +67,14 @@ class PayrollServiceTest {
     @Mock
     private PayslipAdvanceDeductionRepository payslipAdvanceDeductionRepository;
 
+    private PayrollStatutoryProperties statutoryProps;
     private PayrollService payrollService;
 
     @BeforeEach
     void setUp() {
+        statutoryProps = new PayrollStatutoryProperties();
+        statutoryProps.setProvidentFundMonthly(BigDecimal.ZERO);
+        statutoryProps.setProfessionalTaxMonthly(BigDecimal.ZERO);
         payrollService = new PayrollService(
                 salaryComponentRepository,
                 compensationRepository,
@@ -79,7 +84,8 @@ class PayrollServiceTest {
                 currentUserService,
                 payslipPdfService,
                 salaryAdvanceRepository,
-                payslipAdvanceDeductionRepository
+                payslipAdvanceDeductionRepository,
+                statutoryProps
         );
     }
 
@@ -304,6 +310,70 @@ class PayrollServiceTest {
         assertEquals(new BigDecimal("30000"), saved.getGrossAmount());
         assertEquals(new BigDecimal("30000"), saved.getNetAmount());
         assertEquals(0, saved.getDeductionAmount().compareTo(BigDecimal.ZERO));
+    }
+
+    @Test
+    void createPayRun_addsStatutoryPfAndPt_whenConfigured() {
+        statutoryProps.setProvidentFundMonthly(new BigDecimal("1800"));
+        statutoryProps.setProfessionalTaxMonthly(new BigDecimal("200"));
+        when(currentUserService.requireCurrentUser()).thenReturn(hrUser());
+        LocalDate start = LocalDate.of(2026, 6, 1);
+        LocalDate end = LocalDate.of(2026, 6, 30);
+        when(payRunRepository.existsByPeriodStartAndPeriodEnd(start, end)).thenReturn(false);
+        when(payRunRepository.save(any(PayRun.class))).thenAnswer(inv -> {
+            PayRun r = inv.getArgument(0);
+            if (r.getId() == null) {
+                r.setId(90L);
+            }
+            return r;
+        });
+        Employee emp = employee(8L);
+        when(employeeRepository.findAll()).thenReturn(List.of(emp));
+
+        SalaryComponent earning = new SalaryComponent();
+        earning.setId(1L);
+        earning.setCode("BASIC");
+        earning.setName("Basic");
+        earning.setKind(SalaryComponentKind.EARNING);
+        earning.setActive(true);
+        EmployeeCompensationLine line = new EmployeeCompensationLine();
+        line.setComponent(earning);
+        line.setAmount(new BigDecimal("30000"));
+        line.setFrequency(CompensationFrequency.MONTHLY);
+        EmployeeCompensation comp = new EmployeeCompensation();
+        comp.getLines().add(line);
+        when(compensationRepository.findActiveAsOf(8L, end)).thenReturn(List.of(comp));
+
+        when(salaryComponentRepository.findByCodeIgnoreCase("ADVANCE_RECOVERY")).thenReturn(Optional.empty());
+
+        SalaryComponent pf = new SalaryComponent();
+        pf.setId(10L);
+        pf.setCode("PF");
+        pf.setName("PF");
+        pf.setKind(SalaryComponentKind.DEDUCTION);
+        pf.setActive(true);
+        SalaryComponent pt = new SalaryComponent();
+        pt.setId(11L);
+        pt.setCode("PT");
+        pt.setName("Professional Tax");
+        pt.setKind(SalaryComponentKind.DEDUCTION);
+        pt.setActive(true);
+        when(salaryComponentRepository.findByCodeIgnoreCase("PF")).thenReturn(Optional.of(pf));
+        when(salaryComponentRepository.findByCodeIgnoreCase("PT")).thenReturn(Optional.of(pt));
+
+        when(payslipRepository.save(any(Payslip.class))).thenAnswer(inv -> {
+            Payslip p = inv.getArgument(0);
+            p.setId(3003L);
+            return p;
+        });
+
+        payrollService.createPayRun(new PayRunCreateRequest(start, end));
+
+        ArgumentCaptor<Payslip> slipCaptor = ArgumentCaptor.forClass(Payslip.class);
+        verify(payslipRepository).save(slipCaptor.capture());
+        Payslip saved = slipCaptor.getValue();
+        assertEquals(0, new BigDecimal("2000").compareTo(saved.getDeductionAmount()));
+        assertEquals(0, new BigDecimal("28000").compareTo(saved.getNetAmount()));
     }
 
     @Test
