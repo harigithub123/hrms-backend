@@ -37,6 +37,9 @@ spring:
 # If startup fails with webServerStartStop / Tomcat: port is likely in use — set SERVER_PORT=8081 or stop the other process
 server:
   port: ${SERVER_PORT:8080}
+  error:
+    # Expose exception reason in JSON so API clients can show validation text (e.g. payroll bank rules).
+    include-message: always
 
 management:
   endpoints:

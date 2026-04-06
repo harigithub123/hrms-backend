@@ -23,8 +23,10 @@ public class EmployeeController {
     }
 
     @GetMapping
-    public Page<EmployeeDto> list(@PageableDefault(size = 10, sort = "firstName") Pageable pageable) {
-        return service.findAll(pageable);
+    public Page<EmployeeDto> list(
+            @RequestParam(name = "q", required = false) String q,
+            @PageableDefault(size = 10, sort = "firstName") Pageable pageable) {
+        return service.findAll(pageable, q);
     }
 
     @GetMapping("/all")

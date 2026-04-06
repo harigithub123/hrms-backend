@@ -40,8 +40,12 @@ public class EmployeeService {
     }
 
     @Transactional(readOnly = true)
-    public Page<EmployeeDto> findAll(Pageable pageable) {
-        return employeeRepository.findAll(pageable).map(EmployeeDto::from);
+    public Page<EmployeeDto> findAll(Pageable pageable, String q) {
+        String trimmed = q == null ? "" : q.trim();
+        Page<Employee> page = trimmed.isEmpty()
+                ? employeeRepository.findAll(pageable)
+                : employeeRepository.searchByText(trimmed, pageable);
+        return page.map(EmployeeDto::from);
     }
 
     @Transactional(readOnly = true)

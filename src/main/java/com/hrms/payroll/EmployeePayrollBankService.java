@@ -11,6 +11,7 @@ import com.hrms.onboarding.repository.OnboardingBankDetailsRepository;
 import com.hrms.onboarding.repository.OnboardingCaseRepository;
 import com.hrms.org.entity.Employee;
 import com.hrms.org.repository.EmployeeRepository;
+import com.hrms.payroll.dto.EmployeePayrollBankSummaryDto;
 import com.hrms.payroll.dto.PayrollBankAuditDto;
 import com.hrms.payroll.entity.EmployeePayrollBank;
 import com.hrms.payroll.entity.EmployeePayrollBankAudit;
@@ -18,12 +19,15 @@ import com.hrms.payroll.repository.EmployeePayrollBankAuditRepository;
 import com.hrms.payroll.repository.EmployeePayrollBankRepository;
 import com.hrms.security.CurrentUserService;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -55,23 +59,35 @@ public class EmployeePayrollBankService {
 
     @Transactional(readOnly = true)
     public EmployeePayrollBankContextDto getContextForHr(Long employeeId) {
-        requireHrAdmin();
         if (!employeeRepository.existsById(employeeId)) {
             throw new IllegalArgumentException("Employee not found: " + employeeId);
         }
         return buildContext(employeeId);
     }
 
+    /**
+     * HR adds a new payroll-bank version: each save must use an effective date on or after today,
+     * strictly after the current row when one exists, and never reuse a date already recorded in audit history.
+     * Existing active details are not edited in place; onboarding sync paths use other methods.
+     */
     @Transactional
     public EmployeePayrollBankContextDto upsertForHr(Long employeeId, OnboardingBankDetailsUpsertRequest req) {
-        requireHrAdmin();
         User actor = currentUserService.requireCurrentUser();
         Employee emp = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new IllegalArgumentException("Employee not found: " + employeeId));
         LocalDate eff = req.effectiveFrom() != null ? req.effectiveFrom() : LocalDate.now();
         OnboardingBankAccountType accountType = parseAccountType(req.accountType());
 
+        LocalDate today = LocalDate.now();
+        if (eff.isBefore(today)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Effective date cannot be in the past; backdated bank changes can conflict with payslips already processed.");
+        }
+
         Optional<EmployeePayrollBank> before = payrollBankRepository.findByEmployee_Id(employeeId);
+        assertHrEffectiveDateAfterCurrentActive(before, eff);
+        assertEffectiveDateNotAlreadyUsedInHistory(employeeId, eff);
+
         EmployeePayrollBank row = before.orElseGet(() -> {
             EmployeePayrollBank n = new EmployeePayrollBank();
             n.setEmployee(emp);
@@ -83,7 +99,7 @@ public class EmployeePayrollBankService {
         payrollBankRepository.save(row);
 
         String detailAfter = auditSnapshot(row);
-        String action = before.isEmpty() ? "CREATED" : "UPDATED";
+        String action = before.isEmpty() ? "HR_CREATED" : "HR_ADDED";
         recordAudit(emp, action, detailBefore + " -> " + detailAfter, actor);
 
         mirrorToOnboardingCaseIfPresent(emp, row);
@@ -135,12 +151,22 @@ public class EmployeePayrollBankService {
 
     @Transactional(readOnly = true)
     public List<PayrollBankAuditDto> listAuditsForHr(Long employeeId) {
-        requireHrAdmin();
         if (!employeeRepository.existsById(employeeId)) {
             throw new IllegalArgumentException("Employee not found: " + employeeId);
         }
         return auditRepository.findByEmployee_IdOrderByCreatedAtDesc(employeeId).stream()
                 .map(PayrollBankAuditDto::from)
+                .sorted(Comparator
+                        .comparing(PayrollBankAuditDto::effectiveFrom, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .reversed()
+                        .thenComparing(PayrollBankAuditDto::createdAt, Comparator.reverseOrder()))
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<EmployeePayrollBankSummaryDto> listHrEmployeeSummaries() {
+        return employeeRepository.findAll(Sort.by(Sort.Order.asc("firstName"), Sort.Order.asc("lastName"))).stream()
+                .map(e -> EmployeePayrollBankSummaryDto.of(e, resolveDisplayBank(e.getId())))
                 .collect(Collectors.toList());
     }
 
@@ -249,11 +275,31 @@ public class EmployeePayrollBankService {
         return "****" + d.substring(d.length() - 4);
     }
 
-    private void requireHrAdmin() {
-        User u = currentUserService.requireCurrentUser();
-        if (!u.getRoles().stream().anyMatch(r ->
-                "ROLE_HR".equals(r.getName()) || "ROLE_ADMIN".equals(r.getName()))) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "HR or Admin only");
+    /**
+     * When a payroll row already exists, HR must choose an effective date strictly after the current active one
+     * (add-new versioning; no in-place edit of the same effective date).
+     */
+    private void assertHrEffectiveDateAfterCurrentActive(Optional<EmployeePayrollBank> existing, LocalDate newEff) {
+        if (existing.isEmpty()) {
+            return;
+        }
+        LocalDate current = existing.get().getEffectiveFrom();
+        if (!newEff.isAfter(current)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Effective date must be after the current active bank effective date (" + current
+                            + "). Add a new version with a later date.");
+        }
+    }
+
+    /** Rejects reuse of any effective date already present on this employee’s payroll-bank audit trail. */
+    private void assertEffectiveDateNotAlreadyUsedInHistory(Long employeeId, LocalDate newEff) {
+        boolean alreadyUsed = auditRepository.findByEmployee_IdOrderByCreatedAtDesc(employeeId).stream()
+                .map(a -> PayrollBankAuditDto.extractEffectiveFromNewState(a.getDetail()))
+                .filter(Objects::nonNull)
+                .anyMatch(d -> d.equals(newEff));
+        if (alreadyUsed) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "This effective date was already used for this employee. Choose a different date.");
         }
     }
 }
