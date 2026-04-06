@@ -64,11 +64,6 @@ public class EmployeeAccountService {
         });
     }
 
-    @Transactional
-    public void deleteUserForEmployee(Long employeeId) {
-        userRepository.findByEmployeeId(employeeId).ifPresent(userRepository::delete);
-    }
-
     /**
      * Startup backfill: create login for employees that still have no user (e.g. created before auto-provisioning).
      */

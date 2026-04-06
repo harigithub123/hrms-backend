@@ -15,7 +15,10 @@ public record EmployeeDto(
         String designationName,
         Long managerId,
         String managerName,
-        LocalDate joinedAt
+        LocalDate joinedAt,
+        EmploymentStatus employmentStatus,
+        LocalDate lastWorkingDate,
+        String exitReason
 ) {
     public static EmployeeDto from(com.hrms.org.entity.Employee e) {
         return new EmployeeDto(
@@ -31,7 +34,10 @@ public record EmployeeDto(
                 e.getDesignation() != null ? e.getDesignation().getName() : null,
                 e.getManager() != null ? e.getManager().getId() : null,
                 e.getManager() != null ? (e.getManager().getFirstName() + " " + e.getManager().getLastName()).trim() : null,
-                e.getJoinedAt()
+                e.getJoinedAt(),
+                e.getEmploymentStatus(),
+                e.getLastWorkingDate(),
+                e.getExitReason()
         );
     }
 }

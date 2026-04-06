@@ -48,10 +48,4 @@ public class EmployeeController {
     public EmployeeDto update(@PathVariable Long id, @Valid @RequestBody EmployeeRequest req) {
         return service.update(id, req);
     }
-
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
-        service.delete(id);
-        return ResponseEntity.noContent().build();
-    }
 }

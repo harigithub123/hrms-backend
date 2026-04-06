@@ -1,5 +1,6 @@
 package com.hrms.org.entity;
 
+import com.hrms.org.EmploymentStatus;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -42,6 +43,16 @@ public class Employee {
     @Column(name = "joined_at")
     private LocalDate joinedAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "employment_status", nullable = false, length = 40)
+    private EmploymentStatus employmentStatus = EmploymentStatus.JOINED;
+
+    @Column(name = "last_working_date")
+    private LocalDate lastWorkingDate;
+
+    @Column(name = "exit_reason", length = 1000)
+    private String exitReason;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -80,6 +91,14 @@ public class Employee {
     public void setManager(Employee manager) { this.manager = manager; }
     public LocalDate getJoinedAt() { return joinedAt; }
     public void setJoinedAt(LocalDate joinedAt) { this.joinedAt = joinedAt; }
+    public EmploymentStatus getEmploymentStatus() { return employmentStatus; }
+    public void setEmploymentStatus(EmploymentStatus employmentStatus) {
+        this.employmentStatus = employmentStatus != null ? employmentStatus : EmploymentStatus.JOINED;
+    }
+    public LocalDate getLastWorkingDate() { return lastWorkingDate; }
+    public void setLastWorkingDate(LocalDate lastWorkingDate) { this.lastWorkingDate = lastWorkingDate; }
+    public String getExitReason() { return exitReason; }
+    public void setExitReason(String exitReason) { this.exitReason = exitReason; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 }

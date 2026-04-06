@@ -26,6 +26,7 @@ import com.hrms.onboarding.repository.OnboardingCaseRepository;
 import com.hrms.onboarding.repository.OnboardingTaskAuditRepository;
 import com.hrms.onboarding.repository.OnboardingTaskRepository;
 import com.hrms.payroll.EmployeePayrollBankService;
+import com.hrms.org.EmploymentStatus;
 import com.hrms.org.entity.Employee;
 import com.hrms.org.repository.DepartmentRepository;
 import com.hrms.org.repository.DesignationRepository;
@@ -56,6 +57,11 @@ public class OnboardingService {
             "IT access & equipment",
             "Payroll & bank details",
             "Orientation schedule"
+    );
+
+    private static final List<String> EXIT_LETTER_TASKS = List.of(
+            "Issue experience letter",
+            "Issue relieving letter"
     );
 
     private final OnboardingCaseRepository caseRepository;
@@ -217,6 +223,80 @@ public class OnboardingService {
             t.setDone(false);
             t.setSortOrder(order++);
             taskRepository.save(t);
+        }
+    }
+
+    /**
+     * When an employee moves to a separation status, ensures an onboarding case (creating one if needed)
+     * has pending tasks to issue experience and relieving letters. Idempotent: skips task labels already present.
+     */
+    @Transactional
+    public void ensureExitLetterTasks(Long employeeId) {
+        requireHrAdmin();
+        Employee emp = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new IllegalArgumentException("Employee not found: " + employeeId));
+        OnboardingCase c = caseRepository.findFirstByEmployee_IdOrderByIdDesc(employeeId)
+                .orElseGet(() -> createCaseForExitLetters(emp));
+        enrichCaseNotesWithExitDetailsIfNeeded(c, emp);
+        c = caseRepository.save(c);
+        addExitLetterTasksIfAbsent(c);
+    }
+
+    private OnboardingCase createCaseForExitLetters(Employee emp) {
+        OnboardingCase c = new OnboardingCase();
+        c.setStatus(OnboardingStatus.IN_PROGRESS);
+        c.setEmployee(emp);
+        c.setCandidateFirstName(emp.getFirstName());
+        c.setCandidateLastName(emp.getLastName());
+        c.setCandidateEmail(emp.getEmail());
+        c.setJoinDate(emp.getJoinedAt() != null ? emp.getJoinedAt() : LocalDate.now());
+        c.setDepartment(emp.getDepartment());
+        c.setDesignation(emp.getDesignation());
+        c.setManager(emp.getManager());
+        c.setNotes("Opened for experience and relieving letters (status: " + emp.getEmploymentStatus() + ").\n\n"
+                + buildExitDetailFooter(emp));
+        return caseRepository.save(c);
+    }
+
+    /** Appends last working date and reason to case notes when missing (e.g. hired employee, later given a separation status). */
+    private void enrichCaseNotesWithExitDetailsIfNeeded(OnboardingCase c, Employee emp) {
+        if (!EmploymentStatus.isSeparation(emp.getEmploymentStatus())) {
+            return;
+        }
+        String footer = buildExitDetailFooter(emp);
+        String n = c.getNotes() != null ? c.getNotes() : "";
+        if (n.contains("Last working date:")) {
+            return;
+        }
+        c.setNotes(n.isBlank() ? footer : n + "\n\n" + footer);
+    }
+
+    private static String buildExitDetailFooter(Employee emp) {
+        return "Status: " + emp.getEmploymentStatus()
+                + "\nLast working date: " + emp.getLastWorkingDate()
+                + "\nReason: " + (emp.getExitReason() != null ? emp.getExitReason() : "");
+    }
+
+    private void addExitLetterTasksIfAbsent(OnboardingCase c) {
+        if (c.getStatus() == OnboardingStatus.CANCELLED) {
+            throw new IllegalArgumentException("Cannot add letter tasks to a cancelled onboarding case");
+        }
+        List<OnboardingTask> existing = taskRepository.findByOnboardingCaseIdOrderBySortOrderAsc(c.getId());
+        User u = currentUserService.requireCurrentUser();
+        int order = taskRepository.findMaxSortOrderForCase(c.getId()) + 1;
+        for (String label : EXIT_LETTER_TASKS) {
+            boolean has = existing.stream()
+                    .anyMatch(t -> label.equalsIgnoreCase(t.getLabel().trim()));
+            if (!has) {
+                OnboardingTask t = new OnboardingTask();
+                t.setOnboardingCase(c);
+                t.setLabel(label);
+                t.setStatus(OnboardingTaskStatus.PENDING);
+                t.setDone(false);
+                t.setSortOrder(order++);
+                t = taskRepository.save(t);
+                recordAudit(t, "CREATED", "Task created: " + t.getLabel(), u);
+            }
         }
     }
 
@@ -461,8 +541,8 @@ public class OnboardingService {
     }
 
     private void ensureCaseEditable(OnboardingCase c) {
-        if (c.getStatus() == OnboardingStatus.COMPLETED) {
-            throw new IllegalArgumentException("Cannot modify a completed onboarding case");
+        if (c.getStatus() == OnboardingStatus.CANCELLED) {
+            throw new IllegalArgumentException("Cannot modify tasks for a cancelled onboarding case");
         }
     }
 

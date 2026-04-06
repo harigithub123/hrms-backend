@@ -5,6 +5,7 @@ import com.hrms.auth.entity.User;
 import com.hrms.org.entity.Department;
 import com.hrms.org.entity.Designation;
 import com.hrms.org.entity.Employee;
+import com.hrms.onboarding.OnboardingService;
 import com.hrms.org.repository.DepartmentRepository;
 import com.hrms.org.repository.DesignationRepository;
 import com.hrms.org.repository.EmployeeRepository;
@@ -26,17 +27,20 @@ public class EmployeeService {
     private final DesignationRepository designationRepository;
     private final CurrentUserService currentUserService;
     private final EmployeeAccountService employeeAccountService;
+    private final OnboardingService onboardingService;
 
     public EmployeeService(EmployeeRepository employeeRepository,
                            DepartmentRepository departmentRepository,
                            DesignationRepository designationRepository,
                            CurrentUserService currentUserService,
-                           EmployeeAccountService employeeAccountService) {
+                           EmployeeAccountService employeeAccountService,
+                           OnboardingService onboardingService) {
         this.employeeRepository = employeeRepository;
         this.departmentRepository = departmentRepository;
         this.designationRepository = designationRepository;
         this.currentUserService = currentUserService;
         this.employeeAccountService = employeeAccountService;
+        this.onboardingService = onboardingService;
     }
 
     @Transactional(readOnly = true)
@@ -81,25 +85,27 @@ public class EmployeeService {
     public EmployeeDto create(EmployeeRequest req) {
         Employee e = new Employee();
         mapRequestToEntity(req, e);
+        validateSeparationExitDetails(e);
         e = employeeRepository.save(e);
         employeeAccountService.provisionUserForNewEmployee(e);
+        if (EmploymentStatus.isSeparation(e.getEmploymentStatus())) {
+            onboardingService.ensureExitLetterTasks(e.getId());
+        }
         return EmployeeDto.from(e);
     }
 
     @Transactional
     public EmployeeDto update(Long id, EmployeeRequest req) {
         Employee e = employeeRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("Employee not found: " + id));
+        EmploymentStatus previousStatus = e.getEmploymentStatus();
         mapRequestToEntity(req, e);
+        validateSeparationExitDetails(e);
         Employee saved = employeeRepository.save(e);
         employeeAccountService.syncEmailFromEmployee(saved);
+        if (EmploymentStatus.isSeparation(saved.getEmploymentStatus()) && !EmploymentStatus.isSeparation(previousStatus)) {
+            onboardingService.ensureExitLetterTasks(saved.getId());
+        }
         return EmployeeDto.from(saved);
-    }
-
-    @Transactional
-    public void delete(Long id) {
-        if (!employeeRepository.existsById(id)) throw new IllegalArgumentException("Employee not found: " + id);
-        employeeAccountService.deleteUserForEmployee(id);
-        employeeRepository.deleteById(id);
     }
 
     private void mapRequestToEntity(EmployeeRequest req, Employee e) {
@@ -111,5 +117,28 @@ public class EmployeeService {
         e.setJoinedAt(req.joinedAt());
         e.setDepartment(req.departmentId() != null ? departmentRepository.getReferenceById(req.departmentId()) : null);
         e.setDesignation(req.designationId() != null ? designationRepository.getReferenceById(req.designationId()) : null);
+        e.setManager(req.managerId() != null ? employeeRepository.getReferenceById(req.managerId()) : null);
+        if (req.employmentStatus() != null) {
+            e.setEmploymentStatus(req.employmentStatus());
+        }
+        if (req.lastWorkingDate() != null) {
+            e.setLastWorkingDate(req.lastWorkingDate());
+        }
+        if (req.exitReason() != null) {
+            String r = req.exitReason().trim();
+            e.setExitReason(r.isEmpty() ? null : r);
+        }
+    }
+
+    private static void validateSeparationExitDetails(Employee e) {
+        if (!EmploymentStatus.isSeparation(e.getEmploymentStatus())) {
+            return;
+        }
+        if (e.getLastWorkingDate() == null) {
+            throw new IllegalArgumentException("Last working date is required when employment status is not JOINED.");
+        }
+        if (e.getExitReason() == null || e.getExitReason().isBlank()) {
+            throw new IllegalArgumentException("Exit reason is required when employment status is not JOINED.");
+        }
     }
 }
