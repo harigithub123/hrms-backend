@@ -42,6 +42,7 @@ import java.time.LocalDate;
 import java.time.Year;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -60,8 +61,9 @@ public class OnboardingService {
     );
 
     private static final List<String> EXIT_LETTER_TASKS = List.of(
+            "Issue relieving letter",
             "Issue experience letter",
-            "Issue relieving letter"
+            "Issue full and final letter"
     );
 
     private final OnboardingCaseRepository caseRepository;
@@ -131,6 +133,40 @@ public class OnboardingService {
         OnboardingCase c = caseRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Onboarding case not found: " + id));
         return toDto(c);
+    }
+
+    /**
+     * Onboarding cases linked to employees whose employment status is {@link EmploymentStatus#RESIGNED} or
+     * {@link EmploymentStatus#EXITED}. Use {@link #syncSeparationBoardCases()} to create missing cases and letter tasks.
+     */
+    @Transactional(readOnly = true)
+    public List<OnboardingCaseDto> listSeparationBoard() {
+        requireHrAdmin();
+        return buildSeparationBoardList();
+    }
+
+    /**
+     * Ensures each resigned or exited employee has a separation case with relieving, experience, and full &amp; final letter tasks.
+     */
+    @Transactional
+    public List<OnboardingCaseDto> syncSeparationBoardCases() {
+        requireHrAdmin();
+        for (Employee e : employeeRepository.findByEmploymentStatusIn(
+                EnumSet.of(EmploymentStatus.RESIGNED, EmploymentStatus.EXITED))) {
+            ensureExitLetterTasks(e.getId());
+        }
+        return buildSeparationBoardList();
+    }
+
+    private List<OnboardingCaseDto> buildSeparationBoardList() {
+        List<Employee> exits = employeeRepository.findByEmploymentStatusIn(
+                EnumSet.of(EmploymentStatus.RESIGNED, EmploymentStatus.EXITED));
+        return exits.stream()
+                .map(e -> caseRepository.findFirstByEmployee_IdOrderByIdDesc(e.getId()))
+                .flatMap(Optional::stream)
+                .sorted(Comparator.comparing(OnboardingCase::getId).reversed())
+                .map(this::toDto)
+                .collect(Collectors.toList());
     }
 
     @Transactional

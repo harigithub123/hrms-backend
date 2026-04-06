@@ -2,6 +2,7 @@ package com.hrms.onboarding.dto;
 
 import com.hrms.onboarding.OnboardingStatus;
 import com.hrms.onboarding.entity.OnboardingCase;
+import com.hrms.org.EmploymentStatus;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -21,6 +22,7 @@ public record OnboardingCaseDto(
         Long managerId,
         String managerName,
         Long employeeId,
+        EmploymentStatus employeeEmploymentStatus,
         Long offerId,
         Long assignedHrUserId,
         String notes,
@@ -47,6 +49,7 @@ public record OnboardingCaseDto(
                 c.getManager() != null ? c.getManager().getId() : null,
                 c.getManager() != null ? (c.getManager().getFirstName() + " " + c.getManager().getLastName()).trim() : null,
                 c.getEmployee() != null ? c.getEmployee().getId() : null,
+                c.getEmployee() != null ? c.getEmployee().getEmploymentStatus() : null,
                 c.getOffer() != null ? c.getOffer().getId() : null,
                 c.getAssignedHr() != null ? c.getAssignedHr().getId() : null,
                 c.getNotes(),

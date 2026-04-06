@@ -1,5 +1,6 @@
 package com.hrms.org.repository;
 
+import com.hrms.org.EmploymentStatus;
 import com.hrms.org.entity.Employee;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -8,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 
 @Repository
@@ -16,6 +18,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     long countByManagerId(Long managerId);
 
     List<Employee> findByManagerId(Long managerId);
+
+    List<Employee> findByEmploymentStatusIn(Collection<EmploymentStatus> statuses);
 
     List<Employee> findByDepartmentId(Long departmentId);
 
