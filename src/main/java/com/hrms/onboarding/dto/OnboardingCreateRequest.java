@@ -13,7 +13,6 @@ public record OnboardingCreateRequest(
         @NotNull LocalDate joinDate,
         Long departmentId,
         Long designationId,
-        Long managerId,
         Long offerId,
         Long assignedHrUserId,
         @Size(max = 2000) String notes

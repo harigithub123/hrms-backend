@@ -44,10 +44,6 @@ public class OnboardingCase {
     private Designation designation;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "manager_id")
-    private Employee manager;
-
-    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "employee_id")
     private Employee employee;
 
@@ -96,8 +92,6 @@ public class OnboardingCase {
     public void setDepartment(Department department) { this.department = department; }
     public Designation getDesignation() { return designation; }
     public void setDesignation(Designation designation) { this.designation = designation; }
-    public Employee getManager() { return manager; }
-    public void setManager(Employee manager) { this.manager = manager; }
     public Employee getEmployee() { return employee; }
     public void setEmployee(Employee employee) { this.employee = employee; }
     public JobOffer getOffer() { return offer; }

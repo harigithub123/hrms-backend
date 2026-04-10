@@ -19,10 +19,15 @@ public record OnboardingCaseDto(
         String departmentName,
         Long designationId,
         String designationName,
-        Long managerId,
-        String managerName,
         Long employeeId,
         EmploymentStatus employeeEmploymentStatus,
+        /** Last working date from linked employee; null if no employee. */
+        LocalDate employeeLastWorkingDate,
+        /**
+         * When linked employee exists: true if today is on or after last working date (exit documents may be completed).
+         * false if LWD missing or still in the future; null if no employee on case.
+         */
+        Boolean exitDocumentTasksEligible,
         Long offerId,
         Long assignedHrUserId,
         String notes,
@@ -46,10 +51,10 @@ public record OnboardingCaseDto(
                 c.getDepartment() != null ? c.getDepartment().getName() : null,
                 c.getDesignation() != null ? c.getDesignation().getId() : null,
                 c.getDesignation() != null ? c.getDesignation().getName() : null,
-                c.getManager() != null ? c.getManager().getId() : null,
-                c.getManager() != null ? (c.getManager().getFirstName() + " " + c.getManager().getLastName()).trim() : null,
                 c.getEmployee() != null ? c.getEmployee().getId() : null,
                 c.getEmployee() != null ? c.getEmployee().getEmploymentStatus() : null,
+                c.getEmployee() != null ? c.getEmployee().getLastWorkingDate() : null,
+                exitDocumentEligibility(c),
                 c.getOffer() != null ? c.getOffer().getId() : null,
                 c.getAssignedHr() != null ? c.getAssignedHr().getId() : null,
                 c.getNotes(),
@@ -57,5 +62,16 @@ public record OnboardingCaseDto(
                 tasks,
                 bankDetails
         );
+    }
+
+    private static Boolean exitDocumentEligibility(OnboardingCase c) {
+        if (c.getEmployee() == null) {
+            return null;
+        }
+        LocalDate lwd = c.getEmployee().getLastWorkingDate();
+        if (lwd == null) {
+            return false;
+        }
+        return !LocalDate.now().isBefore(lwd);
     }
 }
