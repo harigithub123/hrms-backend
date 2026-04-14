@@ -30,8 +30,10 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -121,19 +123,28 @@ public class PayrollService {
     }
 
     @Transactional(readOnly = true)
-    public List<PayrollFixedComponentDto> listFixedComponentAmounts() {
+    public List<SalaryComponentAdminDto> listAllComponentsAdminWithFixed() {
         requireHrAdmin();
-        return payrollFixedComponentAmountRepository.findAll().stream()
-                .sorted(Comparator
-                        .comparingInt((PayrollFixedComponentAmount a) -> a.getSalaryComponent().getSortOrder())
-                        .thenComparing((PayrollFixedComponentAmount a) -> a.getSalaryComponent().getCode(),
-                                String.CASE_INSENSITIVE_ORDER))
-                .map(PayrollFixedComponentDto::from)
+
+        Map<Long, PayrollFixedComponentAmount> fixedByComponentId = payrollFixedComponentAmountRepository.findAll().stream()
+                .filter(a -> a.getSalaryComponent() != null && a.getSalaryComponent().getId() != null)
+                .collect(Collectors.toMap(
+                        a -> a.getSalaryComponent().getId(),
+                        Function.identity(),
+                        (a, b) -> a
+                ));
+
+        return salaryComponentRepository.findAll().stream()
+                .sorted(Comparator.comparingInt(SalaryComponent::getSortOrder).thenComparing(SalaryComponent::getCode))
+                .map(c -> {
+                    PayrollFixedComponentAmount fixed = fixedByComponentId.get(c.getId());
+                    return SalaryComponentAdminDto.from(c, fixed != null ? fixed.getMonthlyAmount() : null);
+                })
                 .collect(Collectors.toList());
     }
 
     @Transactional
-    public PayrollFixedComponentDto upsertFixedComponentAmount(Long componentId, PayrollFixedComponentUpsertRequest req) {
+    public void setFixedMonthlyAmount(Long componentId, PayrollFixedComponentUpsertRequest req) {
         requireHrAdmin();
         if (req.monthlyAmount().compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("monthlyAmount must be >= 0");
@@ -148,7 +159,7 @@ public class PayrollService {
                 });
         row.setSalaryComponent(comp);
         row.setMonthlyAmount(req.monthlyAmount().setScale(2, RoundingMode.HALF_UP));
-        return PayrollFixedComponentDto.from(payrollFixedComponentAmountRepository.save(row));
+        payrollFixedComponentAmountRepository.save(row);
     }
 
     @Transactional

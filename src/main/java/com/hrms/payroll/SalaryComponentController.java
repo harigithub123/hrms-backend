@@ -1,6 +1,8 @@
 package com.hrms.payroll;
 
 import com.hrms.payroll.dto.SalaryComponentDto;
+import com.hrms.payroll.dto.SalaryComponentAdminDto;
+import com.hrms.payroll.dto.PayrollFixedComponentUpsertRequest;
 import com.hrms.payroll.dto.SalaryComponentRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -30,6 +32,29 @@ public class SalaryComponentController {
     @PreAuthorize("hasAnyRole('HR', 'ADMIN')")
     public List<SalaryComponentDto> listAll() {
         return payrollService.listAllComponentsAdmin();
+    }
+
+    @GetMapping("/all-with-fixed")
+    @PreAuthorize("hasAnyRole('HR', 'ADMIN')")
+    public List<SalaryComponentAdminDto> listAllWithFixed() {
+        return payrollService.listAllComponentsAdminWithFixed();
+    }
+
+    @PutMapping("/{componentId}/fixed-monthly-amount")
+    @PreAuthorize("hasAnyRole('HR', 'ADMIN')")
+    public ResponseEntity<Void> setFixedMonthlyAmount(
+            @PathVariable Long componentId,
+            @Valid @RequestBody PayrollFixedComponentUpsertRequest req
+    ) {
+        payrollService.setFixedMonthlyAmount(componentId, req);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{componentId}/fixed-monthly-amount")
+    @PreAuthorize("hasAnyRole('HR', 'ADMIN')")
+    public ResponseEntity<Void> clearFixedMonthlyAmount(@PathVariable Long componentId) {
+        payrollService.removeFixedComponentAmount(componentId);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping
