@@ -22,6 +22,7 @@ import com.hrms.payroll.entity.Payslip;
 import com.hrms.payroll.entity.SalaryComponent;
 import com.hrms.payroll.repository.PayRunRepository;
 import com.hrms.payroll.repository.PayslipRepository;
+import com.hrms.payroll.repository.PayrollFixedComponentAmountRepository;
 import com.hrms.payroll.repository.SalaryComponentRepository;
 import com.hrms.security.CurrentUserService;
 import org.junit.jupiter.api.BeforeEach;
@@ -66,6 +67,8 @@ class PayrollServiceTest {
     private SalaryAdvanceRepository salaryAdvanceRepository;
     @Mock
     private PayslipAdvanceDeductionRepository payslipAdvanceDeductionRepository;
+    @Mock
+    private PayrollFixedComponentAmountRepository payrollFixedComponentAmountRepository;
 
     private PayrollStatutoryProperties statutoryProps;
     private PayrollService payrollService;
@@ -75,6 +78,7 @@ class PayrollServiceTest {
         statutoryProps = new PayrollStatutoryProperties();
         statutoryProps.setProvidentFundMonthly(BigDecimal.ZERO);
         statutoryProps.setProfessionalTaxMonthly(BigDecimal.ZERO);
+        when(payrollFixedComponentAmountRepository.findAll()).thenReturn(Collections.emptyList());
         payrollService = new PayrollService(
                 salaryComponentRepository,
                 compensationRepository,
@@ -85,7 +89,8 @@ class PayrollServiceTest {
                 payslipPdfService,
                 salaryAdvanceRepository,
                 payslipAdvanceDeductionRepository,
-                statutoryProps
+                statutoryProps,
+                payrollFixedComponentAmountRepository
         );
     }
 

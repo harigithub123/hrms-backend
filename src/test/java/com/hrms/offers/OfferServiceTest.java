@@ -14,6 +14,7 @@ import com.hrms.onboarding.OnboardingService;
 import com.hrms.org.entity.Employee;
 import com.hrms.org.repository.DepartmentRepository;
 import com.hrms.org.repository.DesignationRepository;
+import com.hrms.payroll.SalaryComponentKind;
 import com.hrms.payroll.entity.SalaryComponent;
 import com.hrms.payroll.repository.SalaryComponentRepository;
 import com.hrms.security.CurrentUserService;
@@ -188,6 +189,7 @@ class OfferServiceTest {
         SalaryComponent component = new SalaryComponent();
         component.setId(1L);
         component.setName("Basic Salary");
+        component.setKind(SalaryComponentKind.EARNING);
         when(salaryComponentRepository.findById(1L)).thenReturn(Optional.of(component));
 
         OfferCompensation compensation = new OfferCompensation();

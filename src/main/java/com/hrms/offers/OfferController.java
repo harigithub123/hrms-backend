@@ -42,7 +42,7 @@ public class OfferController {
     }
 
     @GetMapping("/{id:\\d+}/pdf")
-    public ResponseEntity<byte[]> pdf(@PathVariable Long id) {
+    public ResponseEntity<byte[]> downloadOfferLetter(@PathVariable Long id) {
         OfferService.OfferPdfDownload d = offerService.generatePdfDownload(id);
         String fn = d.filename();
         String disposition = "attachment; filename=\"" + fn.replace("\"", "") + "\"";

@@ -9,7 +9,9 @@ import com.hrms.onboarding.repository.OnboardingBankDetailsRepository;
 import com.hrms.onboarding.repository.OnboardingCaseRepository;
 import com.hrms.payroll.EmployeePayrollBankService;
 import com.hrms.security.CurrentUserService;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.util.Optional;
@@ -45,17 +47,18 @@ public class OnboardingBankDetailsCommandService {
         OnboardingCase c = caseRepository.findById(caseId)
                 .orElseThrow(() -> new IllegalArgumentException("Onboarding case not found: " + caseId));
         ensureBankDetailsEditable(c);
+        if (bankDetailsRepository.findByOnboardingCase_Id(caseId).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Bank details for this onboarding case are already saved and cannot be changed.");
+        }
         OnboardingBankAccountType accountType;
         try {
             accountType = OnboardingBankAccountType.valueOf(req.accountType().trim().toUpperCase());
         } catch (IllegalArgumentException ex) {
             throw new IllegalArgumentException("accountType must be SAVINGS or CURRENT");
         }
-        OnboardingBankDetails b = bankDetailsRepository.findByOnboardingCase_Id(caseId).orElseGet(() -> {
-            OnboardingBankDetails nb = new OnboardingBankDetails();
-            nb.setOnboardingCase(c);
-            return nb;
-        });
+        OnboardingBankDetails b = new OnboardingBankDetails();
+        b.setOnboardingCase(c);
         b.setAccountHolderName(req.accountHolderName().trim());
         b.setBankName(req.bankName().trim());
         b.setBranch(req.branch() != null && !req.branch().isBlank() ? req.branch().trim() : null);

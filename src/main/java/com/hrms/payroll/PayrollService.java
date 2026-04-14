@@ -24,6 +24,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -50,6 +51,7 @@ public class PayrollService {
     private final SalaryAdvanceRepository salaryAdvanceRepository;
     private final PayslipAdvanceDeductionRepository payslipAdvanceDeductionRepository;
     private final PayrollStatutoryProperties payrollStatutoryProperties;
+    private final PayrollFixedComponentAmountRepository payrollFixedComponentAmountRepository;
 
     public PayrollService(
             SalaryComponentRepository salaryComponentRepository,
@@ -61,7 +63,8 @@ public class PayrollService {
             PayslipPdfService payslipPdfService,
             SalaryAdvanceRepository salaryAdvanceRepository,
             PayslipAdvanceDeductionRepository payslipAdvanceDeductionRepository,
-            PayrollStatutoryProperties payrollStatutoryProperties
+            PayrollStatutoryProperties payrollStatutoryProperties,
+            PayrollFixedComponentAmountRepository payrollFixedComponentAmountRepository
     ) {
         this.salaryComponentRepository = salaryComponentRepository;
         this.compensationRepository = compensationRepository;
@@ -73,6 +76,7 @@ public class PayrollService {
         this.salaryAdvanceRepository = salaryAdvanceRepository;
         this.payslipAdvanceDeductionRepository = payslipAdvanceDeductionRepository;
         this.payrollStatutoryProperties = payrollStatutoryProperties;
+        this.payrollFixedComponentAmountRepository = payrollFixedComponentAmountRepository;
     }
 
     @Transactional(readOnly = true)
@@ -116,6 +120,45 @@ public class PayrollService {
         return SalaryComponentDto.from(salaryComponentRepository.save(c));
     }
 
+    @Transactional(readOnly = true)
+    public List<PayrollFixedComponentDto> listFixedComponentAmounts() {
+        requireHrAdmin();
+        return payrollFixedComponentAmountRepository.findAll().stream()
+                .sorted(Comparator
+                        .comparingInt((PayrollFixedComponentAmount a) -> a.getSalaryComponent().getSortOrder())
+                        .thenComparing((PayrollFixedComponentAmount a) -> a.getSalaryComponent().getCode(),
+                                String.CASE_INSENSITIVE_ORDER))
+                .map(PayrollFixedComponentDto::from)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public PayrollFixedComponentDto upsertFixedComponentAmount(Long componentId, PayrollFixedComponentUpsertRequest req) {
+        requireHrAdmin();
+        if (req.monthlyAmount().compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("monthlyAmount must be >= 0");
+        }
+        SalaryComponent comp = salaryComponentRepository.findById(componentId)
+                .orElseThrow(() -> new IllegalArgumentException("Salary component not found: " + componentId));
+        PayrollFixedComponentAmount row = payrollFixedComponentAmountRepository.findBySalaryComponent_Id(componentId)
+                .orElseGet(() -> {
+                    PayrollFixedComponentAmount n = new PayrollFixedComponentAmount();
+                    n.setSalaryComponent(comp);
+                    return n;
+                });
+        row.setSalaryComponent(comp);
+        row.setMonthlyAmount(req.monthlyAmount().setScale(2, RoundingMode.HALF_UP));
+        return PayrollFixedComponentDto.from(payrollFixedComponentAmountRepository.save(row));
+    }
+
+    @Transactional
+    public void removeFixedComponentAmount(Long componentId) {
+        requireHrAdmin();
+        if (payrollFixedComponentAmountRepository.findBySalaryComponent_Id(componentId).isEmpty()) {
+            throw new IllegalArgumentException("No fixed amount configured for component: " + componentId);
+        }
+        payrollFixedComponentAmountRepository.deleteBySalaryComponent_Id(componentId);
+    }
 
     @Transactional
     public PayRunDto createPayRun(PayRunCreateRequest req) {
@@ -182,7 +225,7 @@ public class PayrollService {
             return false;
         }
 
-        addStatutoryDeductionLines(draft);
+        addOrgFixedComponentLines(draft);
 
         List<AdvanceRecovery> recoveries =
                 addAdvanceRecoveryLines(employee, advanceRecoveryComponent, draft);
@@ -225,11 +268,53 @@ public class PayrollService {
         }
     }
 
-    private void addStatutoryDeductionLines(PayslipDraft draft) {
+    /**
+     * Applies org-wide fixed monthly amounts for configured salary components (all employees).
+     * Skips a component if it already appears on the payslip from employee compensation.
+     * When no rows exist in the database, falls back to {@code hrms.payroll.statutory.*} for PF/PT only.
+     */
+    private void addOrgFixedComponentLines(PayslipDraft draft) {
+        List<PayrollFixedComponentAmount> configured = payrollFixedComponentAmountRepository.findAll();
+        if (configured.isEmpty()) {
+            addStatutoryDeductionLinesLegacy(draft);
+            return;
+        }
+        for (PayrollFixedComponentAmount row : configured) {
+            SalaryComponent comp = row.getSalaryComponent();
+            BigDecimal amt = row.getMonthlyAmount();
+            if (amt == null || amt.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            if (!comp.isActive()) {
+                continue;
+            }
+            if (draftHasComponentCode(draft, comp.getCode())) {
+                continue;
+            }
+            addFixedOrgLine(draft, comp, amt);
+        }
+    }
+
+    private void addStatutoryDeductionLinesLegacy(PayslipDraft draft) {
         addConfiguredDeductionIfAbsent(draft, PF_COMPONENT_CODE,
                 payrollStatutoryProperties.getProvidentFundMonthly());
         addConfiguredDeductionIfAbsent(draft, PT_COMPONENT_CODE,
                 payrollStatutoryProperties.getProfessionalTaxMonthly());
+    }
+
+    private void addFixedOrgLine(PayslipDraft draft, SalaryComponent comp, BigDecimal amount) {
+        PayslipLine pl = new PayslipLine();
+        pl.setComponent(comp);
+        pl.setComponentCode(comp.getCode());
+        pl.setComponentName(comp.getName());
+        pl.setKind(comp.getKind());
+        pl.setAmount(amount);
+        draft.slipLines.add(pl);
+        if (comp.getKind() == SalaryComponentKind.EARNING) {
+            draft.gross = draft.gross.add(amount);
+        } else {
+            draft.deductions = draft.deductions.add(amount);
+        }
     }
 
     private void addConfiguredDeductionIfAbsent(PayslipDraft draft, String componentCode, BigDecimal amount) {

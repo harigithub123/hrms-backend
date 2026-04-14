@@ -68,8 +68,8 @@ hrms:
     from: ${HRMS_EMAIL_FROM:no-reply@example.com}
     reply-to: ${HRMS_EMAIL_REPLY_TO:}
     offer-subject: ${HRMS_OFFER_EMAIL_SUBJECT:Your Offer Letter}
-  # Fixed monthly statutory deductions on each payslip (after compensation lines).
-  # Skipped for a component if the employee's compensation already includes that code (PF / PT).
+  # Fallback PF/PT amounts only when payroll_fixed_component_amounts has no rows (e.g. before migration).
+  # Configure org-wide fixed components via HR UI: Payroll → Fixed components (all employees).
   payroll:
     statutory:
       provident-fund-monthly: ${HRMS_PAYROLL_PF_MONTHLY:1800}

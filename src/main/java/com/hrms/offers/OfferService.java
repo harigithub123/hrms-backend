@@ -12,6 +12,7 @@ import com.hrms.offers.repository.JobOfferRepository;
 import com.hrms.onboarding.OnboardingService;
 import com.hrms.org.repository.DepartmentRepository;
 import com.hrms.org.repository.DesignationRepository;
+import com.hrms.payroll.SalaryComponentKind;
 import com.hrms.payroll.entity.SalaryComponent;
 import com.hrms.payroll.repository.SalaryComponentRepository;
 import com.hrms.security.CurrentUserService;
@@ -157,10 +158,16 @@ public class OfferService {
     private BigDecimal toAnnualAmount(OfferCompensationLineRequest line) {
         BigDecimal amount = line.amount() != null ? line.amount() : BigDecimal.ZERO;
 
-        return switch (line.frequency()) {
+        SalaryComponent sc = salaryComponentRepository.findById(line.componentId())
+                .orElseThrow(() -> new IllegalArgumentException("Salary component not found: " + line.componentId()));
+        BigDecimal annual = switch (line.frequency()) {
             case MONTHLY -> amount.multiply(BigDecimal.valueOf(12));
             case YEARLY, ONE_TIME -> amount;
         };
+        if (sc.getKind() == SalaryComponentKind.DEDUCTION) {
+            annual = annual.negate();
+        }
+        return annual;
     }
 
     @Transactional
@@ -238,11 +245,6 @@ public class OfferService {
                 lines
         );
         byte[] pdf = offerPdfService.generateOfferLetter(model);
-//        transactionTemplate.executeWithoutResult(status -> {
-////            jobOffer = jobOfferRepository.findById(id)
-////                    .orElseThrow(() -> new IllegalArgumentException("Offer not found: " + id));
-////            jobOffer.setPdfGeneratedAt(Instant.now()); TODO:: check why we need this code.
-//        });
         return new OfferPdfDownload(pdf, buildOfferPdfFilename(model.employeeName()));
     }
 
