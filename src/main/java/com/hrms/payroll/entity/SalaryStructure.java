@@ -10,7 +10,7 @@ import java.util.List;
 
 @Entity
 @Table(name = "employee_salary_structures")
-public class EmployeeSalaryStructure {
+public class SalaryStructure {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -23,8 +23,11 @@ public class EmployeeSalaryStructure {
     @Column(name = "effective_from", nullable = false)
     private LocalDate effectiveFrom;
 
-    @Column(nullable = false, length = 10)
-    private String currency = "INR";
+    @Column(name = "effective_to")
+    private LocalDate effectiveTo;
+
+    @Column(name = "is_active", nullable = false)
+    private boolean active = true;
 
     @Column(length = 500)
     private String note;
@@ -33,7 +36,7 @@ public class EmployeeSalaryStructure {
     private Instant createdAt;
 
     @OneToMany(mappedBy = "structure", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<EmployeeSalaryStructureLine> lines = new ArrayList<>();
+    private List<SalaryStructureLine> lines = new ArrayList<>();
 
     @PrePersist
     protected void onCreate() {
@@ -46,10 +49,12 @@ public class EmployeeSalaryStructure {
     public void setEmployee(Employee employee) { this.employee = employee; }
     public LocalDate getEffectiveFrom() { return effectiveFrom; }
     public void setEffectiveFrom(LocalDate effectiveFrom) { this.effectiveFrom = effectiveFrom; }
-    public String getCurrency() { return currency; }
-    public void setCurrency(String currency) { this.currency = currency; }
+    public LocalDate getEffectiveTo() { return effectiveTo; }
+    public void setEffectiveTo(LocalDate effectiveTo) { this.effectiveTo = effectiveTo; }
+    public boolean isActive() { return active; }
+    public void setActive(boolean active) { this.active = active; }
     public String getNote() { return note; }
     public void setNote(String note) { this.note = note; }
-    public List<EmployeeSalaryStructureLine> getLines() { return lines; }
-    public void setLines(List<EmployeeSalaryStructureLine> lines) { this.lines = lines; }
+    public List<SalaryStructureLine> getLines() { return lines; }
+    public void setLines(List<SalaryStructureLine> lines) { this.lines = lines; }
 }

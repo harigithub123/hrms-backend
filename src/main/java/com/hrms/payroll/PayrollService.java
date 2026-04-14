@@ -39,9 +39,9 @@ import java.util.stream.Collectors;
 @Service
 public class PayrollService {
 
-    private static final String ADVANCE_RECOVERY_COMPONENT_CODE = "ADVANCE_RECOVERY";
-    private static final String PF_COMPONENT_CODE = "PF";
-    private static final String PT_COMPONENT_CODE = "PT";
+    private static final String ADVANCE_RECOVERY_COMPONENT_NAME = "ADVANCE_RECOVERY";
+    private static final String PF_COMPONENT_NAME = "PF";
+    private static final String PT_COMPONENT_NAME = "PT";
 
     private final SalaryComponentRepository salaryComponentRepository;
     private final EmployeeCompensationRepository compensationRepository;
@@ -92,7 +92,7 @@ public class PayrollService {
     public List<SalaryComponentDto> listAllComponentsAdmin() {
         requireHrAdmin();
         return salaryComponentRepository.findAll().stream()
-                .sorted(Comparator.comparingInt(SalaryComponent::getSortOrder).thenComparing(SalaryComponent::getCode))
+                .sorted(Comparator.comparingInt(SalaryComponent::getSortOrder).thenComparing(SalaryComponent::getName))
                 .map(SalaryComponentDto::from)
                 .collect(Collectors.toList());
     }
@@ -100,8 +100,8 @@ public class PayrollService {
     @Transactional
     public SalaryComponentDto createComponent(SalaryComponentRequest req) {
         requireHrAdmin();
-        if (salaryComponentRepository.existsByCodeIgnoreCase(req.code())) {
-            throw new IllegalArgumentException("Component code already exists: " + req.code());
+        if (salaryComponentRepository.existsByNameIgnoreCase(req.name())) {
+            throw new IllegalArgumentException("Component name already exists: " + req.name());
         }
         SalaryComponent c = new SalaryComponent();
         mapComponent(req, c);
@@ -113,9 +113,9 @@ public class PayrollService {
         requireHrAdmin();
         SalaryComponent c = salaryComponentRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Component not found: " + id));
-        salaryComponentRepository.findByCodeIgnoreCase(req.code()).ifPresent(other -> {
+        salaryComponentRepository.findByNameIgnoreCase(req.name()).ifPresent(other -> {
             if (!other.getId().equals(id)) {
-                throw new IllegalArgumentException("Component code already exists: " + req.code());
+                throw new IllegalArgumentException("Component name already exists: " + req.name());
             }
         });
         mapComponent(req, c);
@@ -135,7 +135,7 @@ public class PayrollService {
                 ));
 
         return salaryComponentRepository.findAll().stream()
-                .sorted(Comparator.comparingInt(SalaryComponent::getSortOrder).thenComparing(SalaryComponent::getCode))
+                .sorted(Comparator.comparingInt(SalaryComponent::getSortOrder).thenComparing(SalaryComponent::getName))
                 .map(c -> {
                     PayrollFixedComponentAmount fixed = fixedByComponentId.get(c.getId());
                     return SalaryComponentAdminDto.from(c, fixed != null ? fixed.getMonthlyAmount() : null);
@@ -206,7 +206,7 @@ public class PayrollService {
     }
 
     private SalaryComponent findAdvanceRecoveryComponentOrNull() {
-        return salaryComponentRepository.findByCodeIgnoreCase(ADVANCE_RECOVERY_COMPONENT_CODE).orElse(null);
+        return salaryComponentRepository.findByNameIgnoreCase(ADVANCE_RECOVERY_COMPONENT_NAME).orElse(null);
     }
 
     private PayRunDto finalizePayRunOrThrowIfNoPayslips(PayRun run, int payslipCount) {
@@ -266,7 +266,7 @@ public class PayrollService {
             }
             PayslipLine pl = new PayslipLine();
             pl.setComponent(comp);
-            pl.setComponentCode(comp.getCode());
+            pl.setComponentCode(deriveComponentCode(comp));
             pl.setComponentName(comp.getName());
             pl.setKind(comp.getKind());
             pl.setAmount(monthlyAmount);
@@ -299,7 +299,7 @@ public class PayrollService {
             if (!comp.isActive()) {
                 continue;
             }
-            if (draftHasComponentCode(draft, comp.getCode())) {
+            if (draftHasComponentCode(draft, deriveComponentCode(comp))) {
                 continue;
             }
             addFixedOrgLine(draft, comp, amt);
@@ -307,16 +307,16 @@ public class PayrollService {
     }
 
     private void addStatutoryDeductionLinesLegacy(PayslipDraft draft) {
-        addConfiguredDeductionIfAbsent(draft, PF_COMPONENT_CODE,
+        addConfiguredDeductionIfAbsent(draft, PF_COMPONENT_NAME,
                 payrollStatutoryProperties.getProvidentFundMonthly());
-        addConfiguredDeductionIfAbsent(draft, PT_COMPONENT_CODE,
+        addConfiguredDeductionIfAbsent(draft, PT_COMPONENT_NAME,
                 payrollStatutoryProperties.getProfessionalTaxMonthly());
     }
 
     private void addFixedOrgLine(PayslipDraft draft, SalaryComponent comp, BigDecimal amount) {
         PayslipLine pl = new PayslipLine();
         pl.setComponent(comp);
-        pl.setComponentCode(comp.getCode());
+        pl.setComponentCode(deriveComponentCode(comp));
         pl.setComponentName(comp.getName());
         pl.setKind(comp.getKind());
         pl.setAmount(amount);
@@ -328,20 +328,20 @@ public class PayrollService {
         }
     }
 
-    private void addConfiguredDeductionIfAbsent(PayslipDraft draft, String componentCode, BigDecimal amount) {
+    private void addConfiguredDeductionIfAbsent(PayslipDraft draft, String componentName, BigDecimal amount) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
-        if (draftHasComponentCode(draft, componentCode)) {
+        if (draftHasComponentCode(draft, componentName)) {
             return;
         }
-        salaryComponentRepository.findByCodeIgnoreCase(componentCode).ifPresent(comp -> {
+        salaryComponentRepository.findByNameIgnoreCase(componentName).ifPresent(comp -> {
             if (!comp.isActive() || comp.getKind() != SalaryComponentKind.DEDUCTION) {
                 return;
             }
             PayslipLine pl = new PayslipLine();
             pl.setComponent(comp);
-            pl.setComponentCode(comp.getCode());
+            pl.setComponentCode(deriveComponentCode(comp));
             pl.setComponentName(comp.getName());
             pl.setKind(SalaryComponentKind.DEDUCTION);
             pl.setAmount(amount);
@@ -385,7 +385,7 @@ public class PayrollService {
             }
             PayslipLine pl = new PayslipLine();
             pl.setComponent(advanceComp);
-            pl.setComponentCode(advanceComp.getCode());
+            pl.setComponentCode(deriveComponentCode(advanceComp));
             pl.setComponentName(advanceComp.getName() + " (#" + adv.getId() + ")");
             pl.setKind(SalaryComponentKind.DEDUCTION);
             pl.setAmount(take);
@@ -539,11 +539,22 @@ public class PayrollService {
     }
 
     private static void mapComponent(SalaryComponentRequest req, SalaryComponent c) {
-        c.setCode(req.code().trim().toUpperCase());
         c.setName(req.name().trim());
         c.setKind(req.kind());
         c.setSortOrder(req.sortOrder());
         c.setActive(req.active());
+    }
+
+    private static String deriveComponentCode(SalaryComponent c) {
+        String n = c.getName() != null ? c.getName() : "";
+        String trimmed = n.trim();
+        if (trimmed.isEmpty()) {
+            return c.getId() != null ? "COMP_" + c.getId() : "COMP";
+        }
+        return trimmed
+                .toUpperCase()
+                .replaceAll("[^A-Z0-9]+", "_")
+                .replaceAll("^_+|_+$", "");
     }
 
     private record AdvanceRecovery(SalaryAdvance advance, BigDecimal amount) {}

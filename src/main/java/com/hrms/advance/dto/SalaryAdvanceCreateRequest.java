@@ -9,7 +9,6 @@ import java.math.BigDecimal;
 public record SalaryAdvanceCreateRequest(
         Long employeeId,
         @NotNull @Positive BigDecimal amount,
-        @Size(max = 10) String currency,
         @Size(max = 2000) String reason,
         @NotNull @Positive int recoveryMonths
 ) {}

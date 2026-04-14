@@ -1,6 +1,6 @@
 package com.hrms.payroll.repository;
 
-import com.hrms.payroll.entity.EmployeeSalaryStructure;
+import com.hrms.payroll.entity.SalaryStructure;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -8,19 +8,19 @@ import org.springframework.data.repository.query.Param;
 import java.time.LocalDate;
 import java.util.List;
 
-public interface EmployeeSalaryStructureRepository extends JpaRepository<EmployeeSalaryStructure, Long> {
+public interface SalaryStructureRepository extends JpaRepository<SalaryStructure, Long> {
 
     @Query("""
-            SELECT DISTINCT s FROM EmployeeSalaryStructure s
+            SELECT DISTINCT s FROM SalaryStructure s
             LEFT JOIN FETCH s.lines l
             LEFT JOIN FETCH l.component
             WHERE s.employee.id = :employeeId AND s.effectiveFrom <= :asOf
             ORDER BY s.effectiveFrom DESC
             """)
-    List<EmployeeSalaryStructure> findCandidatesForPayroll(
+    List<SalaryStructure> findCandidatesForPayroll(
             @Param("employeeId") Long employeeId,
             @Param("asOf") LocalDate asOf
     );
 
-    List<EmployeeSalaryStructure> findByEmployeeIdOrderByEffectiveFromDesc(Long employeeId);
+    List<SalaryStructure> findByEmployeeIdOrderByEffectiveFromDesc(Long employeeId);
 }

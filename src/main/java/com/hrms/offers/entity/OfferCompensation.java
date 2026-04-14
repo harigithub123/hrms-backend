@@ -19,9 +19,6 @@ public class OfferCompensation {
     @JoinColumn(name = "offer_id", nullable = false, unique = true)
     private JobOffer offer;
 
-    @Column(nullable = false, length = 10)
-    private String currency = "INR";
-
     @Column(name = "annual_ctc", precision = 14, scale = 2)
     private BigDecimal annualCtc;
 
@@ -40,8 +37,6 @@ public class OfferCompensation {
     public void setId(Long id) { this.id = id; }
     public JobOffer getOffer() { return offer; }
     public void setOffer(JobOffer offer) { this.offer = offer; }
-    public String getCurrency() { return currency; }
-    public void setCurrency(String currency) { this.currency = currency; }
     public BigDecimal getAnnualCtc() { return annualCtc; }
     public void setAnnualCtc(BigDecimal annualCtc) { this.annualCtc = annualCtc; }
     public Instant getCreatedAt() { return createdAt; }

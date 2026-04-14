@@ -10,7 +10,6 @@ import java.math.BigDecimal;
  */
 public record SalaryComponentAdminDto(
         Long id,
-        String code,
         String name,
         SalaryComponentKind kind,
         int sortOrder,
@@ -20,7 +19,6 @@ public record SalaryComponentAdminDto(
     public static SalaryComponentAdminDto from(SalaryComponent c, BigDecimal fixedMonthlyAmount) {
         return new SalaryComponentAdminDto(
                 c.getId(),
-                c.getCode(),
                 c.getName(),
                 c.getKind(),
                 c.getSortOrder(),

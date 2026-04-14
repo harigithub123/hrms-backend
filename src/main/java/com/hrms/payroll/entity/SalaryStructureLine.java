@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 
 @Entity
 @Table(name = "employee_salary_structure_lines", uniqueConstraints = @UniqueConstraint(columnNames = {"structure_id", "component_id"}))
-public class EmployeeSalaryStructureLine {
+public class SalaryStructureLine {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -14,7 +14,7 @@ public class EmployeeSalaryStructureLine {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "structure_id")
-    private EmployeeSalaryStructure structure;
+    private SalaryStructure structure;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "component_id")
@@ -25,8 +25,8 @@ public class EmployeeSalaryStructureLine {
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
-    public EmployeeSalaryStructure getStructure() { return structure; }
-    public void setStructure(EmployeeSalaryStructure structure) { this.structure = structure; }
+    public SalaryStructure getStructure() { return structure; }
+    public void setStructure(SalaryStructure structure) { this.structure = structure; }
     public SalaryComponent getComponent() { return component; }
     public void setComponent(SalaryComponent component) { this.component = component; }
     public BigDecimal getAmount() { return amount; }

@@ -132,7 +132,6 @@ public class OfferService {
             OfferCompensation comp = new OfferCompensation();
             comp.setAnnualCtc(saved.getAnnualCtc() != null ? saved.getAnnualCtc() : BigDecimal.ZERO);
             comp.setOffer(saved);
-            comp.setCurrency(saved.getCurrency() != null ? saved.getCurrency() : "INR");
             for (OfferCompensationLineRequest requestLine : lines) {
                 SalaryComponent sc = salaryComponentRepository.findById(requestLine.componentId())
                         .orElseThrow(() -> new IllegalArgumentException("Salary component not found: " + requestLine.componentId()));
@@ -223,7 +222,6 @@ public class OfferService {
         OfferCompensation comp = offerCompensationRepository.findByOfferId(jobOffer.getId()).orElse(null);
         List<OfferPdfService.OfferCompLine> lines = List.of();
         if (comp != null && comp.getOfferCompensationLine() != null && !comp.getOfferCompensationLine().isEmpty()) {
-            String currency = comp.getCurrency() != null ? comp.getCurrency() : (jobOffer.getCurrency() != null ? jobOffer.getCurrency() : "");
             lines = comp.getOfferCompensationLine().stream().map(l -> {
                 String label = l.getComponent() != null
                         ? l.getComponent().getName()
@@ -363,10 +361,9 @@ public class OfferService {
         return s.substring(0, Math.max(0, max - 3)) + "...";
     }
 
-    private static String formatMoney(BigDecimal amt, String currency) {
+    private static String formatMoney(BigDecimal amt) {
         if (amt == null) return "—";
-        String cur = currency != null && !currency.isBlank() ? currency : "";
-        return (cur.isBlank() ? "" : cur + " ") + amt.toPlainString();
+        return "INR " + amt.toPlainString();
     }
 
 }

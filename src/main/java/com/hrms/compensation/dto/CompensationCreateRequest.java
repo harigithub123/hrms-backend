@@ -13,7 +13,6 @@ public record CompensationCreateRequest(
         @NotNull Long employeeId,
         @NotNull LocalDate effectiveFrom,
         LocalDate effectiveTo,
-        @Size(max = 10) String currency,
         BigDecimal annualCtc,
         @Size(max = 2000) String notes,
         @NotEmpty @Valid List<CompensationLineRequest> lines

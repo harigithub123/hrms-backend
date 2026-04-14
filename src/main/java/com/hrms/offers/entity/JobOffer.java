@@ -58,9 +58,6 @@ public class JobOffer {
     @Column(name = "annual_ctc", precision = 14, scale = 2)
     private BigDecimal annualCtc;
 
-    @Column(nullable = false, length = 10)
-    private String currency = "INR";
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "employee_id")
     private Employee employee;
@@ -109,8 +106,6 @@ public class JobOffer {
     public void setProbationPeriodMonths(Integer probationPeriodMonths) { this.probationPeriodMonths = probationPeriodMonths; }
     public BigDecimal getAnnualCtc() { return annualCtc; }
     public void setAnnualCtc(BigDecimal annualCtc) { this.annualCtc = annualCtc; }
-    public String getCurrency() { return currency; }
-    public void setCurrency(String currency) { this.currency = currency; }
     public Employee getEmployee() { return employee; }
     public void setEmployee(Employee employee) { this.employee = employee; }
     public java.time.Instant getCreatedAt() { return createdAt; }

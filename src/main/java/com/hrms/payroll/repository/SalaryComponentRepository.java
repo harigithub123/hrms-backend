@@ -10,7 +10,7 @@ public interface SalaryComponentRepository extends JpaRepository<SalaryComponent
 
     List<SalaryComponent> findByActiveTrueOrderBySortOrderAsc();
 
-    Optional<SalaryComponent> findByCodeIgnoreCase(String code);
+    Optional<SalaryComponent> findByNameIgnoreCase(String name);
 
-    boolean existsByCodeIgnoreCase(String code);
+    boolean existsByNameIgnoreCase(String name);
 }

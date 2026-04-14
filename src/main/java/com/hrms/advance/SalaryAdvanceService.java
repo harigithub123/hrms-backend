@@ -83,7 +83,6 @@ public class SalaryAdvanceService {
         SalaryAdvance a = new SalaryAdvance();
         a.setEmployee(employeeRepository.getReferenceById(targetEmpId));
         a.setAmount(req.amount());
-        a.setCurrency(req.currency() != null && !req.currency().isBlank() ? req.currency().trim() : "INR");
         a.setReason(req.reason());
         a.setRecoveryMonths(Math.max(1, req.recoveryMonths()));
         a.setStatus(AdvanceStatus.PENDING);

@@ -11,7 +11,8 @@ import java.util.List;
 public record SalaryStructureRequest(
         @NotNull Long employeeId,
         @NotNull LocalDate effectiveFrom,
-        @Size(max = 10) String currency,
+        LocalDate effectiveTo,
+        boolean isActive,
         @Size(max = 500) String note,
         @NotEmpty @Valid List<SalaryStructureLineRequest> lines
 ) {}

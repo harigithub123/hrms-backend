@@ -142,8 +142,6 @@ public class OnboardingHireCompletionService {
         EmployeeCompensation comp = new EmployeeCompensation();
         comp.setEmployee(employee);
         comp.setEffectiveFrom(effectiveFrom);
-        comp.setCurrency(offerComp.getCurrency() != null ? offerComp.getCurrency()
-                : (offer.getCurrency() != null ? offer.getCurrency() : "INR"));
         comp.setNotes("Created from offer #" + offer.getId());
 
         for (OfferCompensationLine ol : offerComp.getOfferCompensationLine()) {
@@ -153,9 +151,6 @@ public class OnboardingHireCompletionService {
             nl.setAmount(ol.getAmount() != null ? ol.getAmount() : BigDecimal.ZERO);
             CompensationFrequency freq = ol.getFrequency() != null ? ol.getFrequency() : CompensationFrequency.MONTHLY;
             nl.setFrequency(freq);
-            if (freq == CompensationFrequency.ONE_TIME) {
-                nl.setPayableOn(effectiveFrom);
-            }
             comp.getLines().add(nl);
         }
         comp.setAnnualCtc(comp.calculateAnnualCtc());

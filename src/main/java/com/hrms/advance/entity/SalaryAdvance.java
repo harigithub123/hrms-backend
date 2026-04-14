@@ -24,9 +24,6 @@ public class SalaryAdvance {
     @Column(nullable = false, precision = 14, scale = 2)
     private BigDecimal amount;
 
-    @Column(nullable = false, length = 10)
-    private String currency = "INR";
-
     @Column(length = 2000)
     private String reason;
 
@@ -87,8 +84,6 @@ public class SalaryAdvance {
     public void setEmployee(Employee employee) { this.employee = employee; }
     public BigDecimal getAmount() { return amount; }
     public void setAmount(BigDecimal amount) { this.amount = amount; }
-    public String getCurrency() { return currency; }
-    public void setCurrency(String currency) { this.currency = currency; }
     public String getReason() { return reason; }
     public void setReason(String reason) { this.reason = reason; }
     public AdvanceStatus getStatus() { return status; }

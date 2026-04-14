@@ -97,7 +97,6 @@ public class CompensationService {
         c.setEmployee(employeeRepository.getReferenceById(req.employeeId()));
         c.setEffectiveFrom(req.effectiveFrom());
         c.setEffectiveTo(req.effectiveTo());
-        c.setCurrency(req.currency() != null && !req.currency().isBlank() ? req.currency().trim() : "INR");
         c.setAnnualCtc(req.annualCtc());
         c.setNotes(req.notes());
         for (CompensationLineRequest lr : req.lines()) {
@@ -108,7 +107,6 @@ public class CompensationService {
             line.setComponent(comp);
             line.setAmount(lr.amount());
             line.setFrequency(lr.frequency());
-            line.setPayableOn(lr.payableOn());
             c.getLines().add(line);
         }
         return toDto(compensationRepository.save(c));

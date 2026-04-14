@@ -29,9 +29,6 @@ public class EmployeeCompensation {
     @Column(name = "effective_to")
     private LocalDate effectiveTo;
 
-    @Column(nullable = false, length = 10)
-    private String currency = "INR";
-
     @Column(name = "annual_ctc", precision = 14, scale = 2)
     private BigDecimal annualCtc;
 
@@ -57,8 +54,6 @@ public class EmployeeCompensation {
     public void setEffectiveFrom(LocalDate effectiveFrom) { this.effectiveFrom = effectiveFrom; }
     public LocalDate getEffectiveTo() { return effectiveTo; }
     public void setEffectiveTo(LocalDate effectiveTo) { this.effectiveTo = effectiveTo; }
-    public String getCurrency() { return currency; }
-    public void setCurrency(String currency) { this.currency = currency; }
     public BigDecimal getAnnualCtc() { return annualCtc; }
     public void setAnnualCtc(BigDecimal annualCtc) { this.annualCtc = annualCtc; }
     public String getNotes() { return notes; }
