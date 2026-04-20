@@ -236,8 +236,6 @@ public class PayrollService {
             return false;
         }
 
-        addOrgFixedComponentLines(draft);
-
         List<AdvanceRecovery> recoveries =
                 addAdvanceRecoveryLines(employee, advanceRecoveryComponent, draft);
 
@@ -276,33 +274,6 @@ public class PayrollService {
                 draft.deductions = draft.deductions.add(monthlyAmount);
             }
             draft.slipLines.add(pl);
-        }
-    }
-
-    /**
-     * Applies org-wide fixed monthly amounts for configured salary components (all employees).
-     * Skips a component if it already appears on the payslip from employee compensation.
-     * When no rows exist in the database, falls back to {@code hrms.payroll.statutory.*} for PF/PT only.
-     */
-    private void addOrgFixedComponentLines(PayslipDraft draft) {
-        List<PayrollFixedComponentAmount> configured = payrollFixedComponentAmountRepository.findAll();
-        if (configured.isEmpty()) {
-            addStatutoryDeductionLinesLegacy(draft);
-            return;
-        }
-        for (PayrollFixedComponentAmount row : configured) {
-            SalaryComponent comp = row.getSalaryComponent();
-            BigDecimal amt = row.getMonthlyAmount();
-            if (amt == null || amt.compareTo(BigDecimal.ZERO) <= 0) {
-                continue;
-            }
-            if (!comp.isActive()) {
-                continue;
-            }
-            if (draftHasComponentCode(draft, deriveComponentCode(comp))) {
-                continue;
-            }
-            addFixedOrgLine(draft, comp, amt);
         }
     }
 
