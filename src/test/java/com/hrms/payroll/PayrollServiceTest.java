@@ -216,37 +216,23 @@ class PayrollServiceTest {
     }
 
     @Test
-    void createPayRun_whenPeriodEndBeforeStart_throws() {
-        when(currentUserService.requireCurrentUser()).thenReturn(hrUser());
-        LocalDate start = LocalDate.of(2026, 4, 30);
-        LocalDate end = LocalDate.of(2026, 4, 1);
-        var req = new PayRunCreateRequest(start, end);
-
-        assertThrows(IllegalArgumentException.class, () -> payrollService.createPayRun(req));
-        verify(payRunRepository, never()).save(any());
-    }
-
-    @Test
     void createPayRun_whenPeriodExists_throws() {
         when(currentUserService.requireCurrentUser()).thenReturn(hrUser());
-        LocalDate start = LocalDate.of(2026, 4, 1);
-        LocalDate end = LocalDate.of(2026, 4, 30);
-        when(payRunRepository.existsByPeriodStartAndPeriodEnd(start, end)).thenReturn(true);
+        when(payRunRepository.existsByPayYearAndPayMonth(2026, 4)).thenReturn(true);
 
         assertThrows(IllegalArgumentException.class,
-                () -> payrollService.createPayRun(new PayRunCreateRequest(start, end)));
+                () -> payrollService.createPayRun(new PayRunCreateRequest(2026, 4)));
         verify(payRunRepository, never()).save(any());
     }
 
     @Test
     void createPayRun_whenNoCompensatedEmployees_deletesDraftAndThrows() {
         when(currentUserService.requireCurrentUser()).thenReturn(hrUser());
-        LocalDate start = LocalDate.of(2026, 4, 1);
         LocalDate end = LocalDate.of(2026, 4, 30);
-        when(payRunRepository.existsByPeriodStartAndPeriodEnd(start, end)).thenReturn(false);
+        when(payRunRepository.existsByPayYearAndPayMonth(2026, 4)).thenReturn(false);
         PayRun draft = new PayRun();
-        draft.setPeriodStart(start);
-        draft.setPeriodEnd(end);
+        draft.setPayYear(2026);
+        draft.setPayMonth(4);
         when(payRunRepository.save(any(PayRun.class))).thenAnswer(inv -> {
             PayRun r = inv.getArgument(0);
             if (r.getId() == null) {
@@ -259,7 +245,7 @@ class PayrollServiceTest {
         when(salaryComponentRepository.findByCodeIgnoreCase("ADVANCE_RECOVERY")).thenReturn(Optional.empty());
 
         assertThrows(IllegalArgumentException.class,
-                () -> payrollService.createPayRun(new PayRunCreateRequest(start, end)));
+                () -> payrollService.createPayRun(new PayRunCreateRequest(2026, 4)));
 
         ArgumentCaptor<PayRun> deleteCaptor = ArgumentCaptor.forClass(PayRun.class);
         verify(payRunRepository).delete(deleteCaptor.capture());
@@ -270,9 +256,8 @@ class PayrollServiceTest {
     @Test
     void createPayRun_finalizesWhenPayslipCreated() {
         when(currentUserService.requireCurrentUser()).thenReturn(adminUser());
-        LocalDate start = LocalDate.of(2026, 4, 1);
         LocalDate end = LocalDate.of(2026, 4, 30);
-        when(payRunRepository.existsByPeriodStartAndPeriodEnd(start, end)).thenReturn(false);
+        when(payRunRepository.existsByPayYearAndPayMonth(2026, 4)).thenReturn(false);
         when(payRunRepository.save(any(PayRun.class))).thenAnswer(inv -> {
             PayRun r = inv.getArgument(0);
             if (r.getId() == null) {
@@ -305,9 +290,11 @@ class PayrollServiceTest {
             return p;
         });
 
-        PayRunDto dto = payrollService.createPayRun(new PayRunCreateRequest(start, end));
+        PayRunDto dto = payrollService.createPayRun(new PayRunCreateRequest(2026, 4));
 
         assertEquals(77L, dto.id());
+        assertEquals(2026, dto.year());
+        assertEquals(4, dto.month());
         assertEquals(PayRunStatus.FINALIZED, dto.status());
         ArgumentCaptor<Payslip> slipCaptor = ArgumentCaptor.forClass(Payslip.class);
         verify(payslipRepository).save(slipCaptor.capture());
@@ -322,9 +309,8 @@ class PayrollServiceTest {
         statutoryProps.setProvidentFundMonthly(new BigDecimal("1800"));
         statutoryProps.setProfessionalTaxMonthly(new BigDecimal("200"));
         when(currentUserService.requireCurrentUser()).thenReturn(hrUser());
-        LocalDate start = LocalDate.of(2026, 6, 1);
         LocalDate end = LocalDate.of(2026, 6, 30);
-        when(payRunRepository.existsByPeriodStartAndPeriodEnd(start, end)).thenReturn(false);
+        when(payRunRepository.existsByPayYearAndPayMonth(2026, 6)).thenReturn(false);
         when(payRunRepository.save(any(PayRun.class))).thenAnswer(inv -> {
             PayRun r = inv.getArgument(0);
             if (r.getId() == null) {
@@ -372,7 +358,7 @@ class PayrollServiceTest {
             return p;
         });
 
-        payrollService.createPayRun(new PayRunCreateRequest(start, end));
+        payrollService.createPayRun(new PayRunCreateRequest(2026, 6));
 
         ArgumentCaptor<Payslip> slipCaptor = ArgumentCaptor.forClass(Payslip.class);
         verify(payslipRepository).save(slipCaptor.capture());
@@ -384,9 +370,8 @@ class PayrollServiceTest {
     @Test
     void createPayRun_appliesAdvanceRecoveryWhenComponentExists() {
         when(currentUserService.requireCurrentUser()).thenReturn(hrUser());
-        LocalDate start = LocalDate.of(2026, 5, 1);
         LocalDate end = LocalDate.of(2026, 5, 31);
-        when(payRunRepository.existsByPeriodStartAndPeriodEnd(start, end)).thenReturn(false);
+        when(payRunRepository.existsByPayYearAndPayMonth(2026, 5)).thenReturn(false);
         when(payRunRepository.save(any(PayRun.class))).thenAnswer(inv -> {
             PayRun r = inv.getArgument(0);
             if (r.getId() == null) {
@@ -435,7 +420,7 @@ class PayrollServiceTest {
         });
         when(salaryAdvanceRepository.save(any(SalaryAdvance.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        payrollService.createPayRun(new PayRunCreateRequest(start, end));
+        payrollService.createPayRun(new PayRunCreateRequest(2026, 5));
 
         verify(payslipAdvanceDeductionRepository).save(any());
         verify(salaryAdvanceRepository).save(argThat(a ->
@@ -499,6 +484,8 @@ class PayrollServiceTest {
         Payslip p = payslipWithEmployee(employee(4L));
         PayRun run = new PayRun();
         run.setId(20L);
+        run.setPayYear(2026);
+        run.setPayMonth(3);
         p.setPayRun(run);
         when(payslipRepository.findByIdWithLines(12L)).thenReturn(Optional.of(p));
         when(payslipPdfService.build(eq(p), eq(run))).thenThrow(new IOException("disk full"));
@@ -513,6 +500,8 @@ class PayrollServiceTest {
         Payslip p = payslipWithEmployee(employee(4L));
         PayRun run = new PayRun();
         run.setId(21L);
+        run.setPayYear(2026);
+        run.setPayMonth(3);
         p.setPayRun(run);
         when(payslipRepository.findByIdWithLines(13L)).thenReturn(Optional.of(p));
         when(payslipPdfService.build(p, run)).thenReturn(new byte[]{1, 2, 3});
@@ -565,6 +554,8 @@ class PayrollServiceTest {
         p.setEmployee(e);
         PayRun run = new PayRun();
         run.setId(5L);
+        run.setPayYear(2026);
+        run.setPayMonth(1);
         p.setPayRun(run);
         p.setGrossAmount(BigDecimal.TEN);
         p.setDeductionAmount(BigDecimal.ZERO);

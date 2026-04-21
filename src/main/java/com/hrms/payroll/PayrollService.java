@@ -27,6 +27,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -174,13 +175,15 @@ public class PayrollService {
     @Transactional
     public PayRunDto createPayRun(PayRunCreateRequest req) {
         requireHrAdmin();
-        validatePayRunCreateRequest(req);
-        PayRun run = createDraftPayRun(req);
+        YearMonth ym = YearMonth.of(req.year(), req.month());
+        LocalDate periodEnd = ym.atEndOfMonth();
+        validatePayRunPeriod(req.year(), req.month());
+        PayRun run = createDraftPayRun(req.year(), req.month());
         SalaryComponent advanceRecoveryComponent = findAdvanceRecoveryComponentOrNull();
 
         int generated = 0;
         for (Employee employee : employeeRepository.findAll()) {
-            if (tryCreatePayslipForEmployee(employee, run, req.periodEnd(), advanceRecoveryComponent)) {
+            if (tryCreatePayslipForEmployee(employee, run, periodEnd, advanceRecoveryComponent)) {
                 generated++;
             }
         }
@@ -188,19 +191,16 @@ public class PayrollService {
         return finalizePayRunOrThrowIfNoPayslips(run, generated);
     }
 
-    private void validatePayRunCreateRequest(PayRunCreateRequest req) {
-        if (req.periodEnd().isBefore(req.periodStart())) {
-            throw new IllegalArgumentException("periodEnd must be on or after periodStart");
-        }
-        if (payRunRepository.existsByPeriodStartAndPeriodEnd(req.periodStart(), req.periodEnd())) {
+    private void validatePayRunPeriod(int year, int month) {
+        if (payRunRepository.existsByPayYearAndPayMonth(year, month)) {
             throw new IllegalArgumentException("A pay run already exists for this period");
         }
     }
 
-    private PayRun createDraftPayRun(PayRunCreateRequest req) {
+    private PayRun createDraftPayRun(int year, int month) {
         PayRun run = new PayRun();
-        run.setPeriodStart(req.periodStart());
-        run.setPeriodEnd(req.periodEnd());
+        run.setPayYear(year);
+        run.setPayMonth(month);
         run.setStatus(PayRunStatus.DRAFT);
         return payRunRepository.save(run);
     }

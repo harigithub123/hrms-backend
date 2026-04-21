@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -69,10 +70,12 @@ public class PayslipPdfService {
             address.setAlignment(Element.ALIGN_CENTER);
             document.add(address);
 
+            LocalDate periodStart = run.resolvePeriodStart();
+            LocalDate periodEnd = run.resolvePeriodEnd();
             String periodText = "Payslip for the period of "
-                    + PERIOD_FMT.format(run.getPeriodStart())
+                    + PERIOD_FMT.format(periodStart)
                     + " to "
-                    + PERIOD_FMT.format(run.getPeriodEnd());
+                    + PERIOD_FMT.format(periodEnd);
             Paragraph payslipTitle = new Paragraph(sanitize(periodText), boldFont);
             payslipTitle.setAlignment(Element.ALIGN_CENTER);
             payslipTitle.setSpacingAfter(10);
@@ -219,7 +222,7 @@ public class PayslipPdfService {
             return null;
         }
         EmployeePayrollBank b = opt.get();
-        if (b.getEffectiveFrom() != null && run.getPeriodEnd().isBefore(b.getEffectiveFrom())) {
+        if (b.getEffectiveFrom() != null && run.resolvePeriodEnd().isBefore(b.getEffectiveFrom())) {
             return null;
         }
         String bn = b.getBankName();
@@ -235,7 +238,7 @@ public class PayslipPdfService {
             return PLACEHOLDER;
         }
         EmployeePayrollBank b = opt.get();
-        if (b.getEffectiveFrom() != null && run.getPeriodEnd().isBefore(b.getEffectiveFrom())) {
+        if (b.getEffectiveFrom() != null && run.resolvePeriodEnd().isBefore(b.getEffectiveFrom())) {
             return PLACEHOLDER;
         }
         return maskAccountLast4(b.getAccountNumber());

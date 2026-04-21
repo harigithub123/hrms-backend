@@ -1,10 +1,10 @@
 package com.hrms.payroll.dto;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 
-import java.time.LocalDate;
-
 public record PayRunCreateRequest(
-        @NotNull LocalDate periodStart,
-        @NotNull LocalDate periodEnd
+        @NotNull @Min(1970) @Max(2200) Integer year,
+        @NotNull @Min(1) @Max(12) Integer month
 ) {}
